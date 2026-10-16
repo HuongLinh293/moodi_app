@@ -171,4 +171,49 @@ class AIReflection {
         );
     }
   }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'possibleEmotions': possibleEmotions,
+      'possibleTrigger': possibleTrigger,
+      'intensifyingThought': intensifyingThought,
+      'reflectionQuestion': reflectionQuestion,
+      'balancedThought': balancedThought,
+      'recommendedExercise': recommendedExercise,
+      'recommendationReason': recommendationReason,
+      'microGoalPrompt': microGoalPrompt,
+      'safetyFlag': safetyFlag,
+      'safetyReason': safetyReason,
+      'userFeedback': userFeedback,
+      'recommendationsDismissed': recommendationsDismissed,
+    };
+  }
+
+  Map<String, dynamic> toJson() => toFirestore();
+
+  factory AIReflection.fromFirestore(Map<String, dynamic> data) {
+    return AIReflection(
+      possibleEmotions: (data['possibleEmotions'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      possibleTrigger: data['possibleTrigger'] as String? ?? '',
+      intensifyingThought: data['intensifyingThought'] as String? ?? '',
+      reflectionQuestion: data['reflectionQuestion'] as String? ?? '',
+      balancedThought: data['balancedThought'] as String? ?? '',
+      recommendedExercise: data['recommendedExercise'] as String? ?? 'grounding',
+      recommendationReason: data['recommendationReason'] as String? ?? '',
+      microGoalPrompt: data['microGoalPrompt'] as String? ?? '',
+      safetyFlag: data['safetyFlag'] as bool? ?? false,
+      safetyReason: data['safetyReason'] as String?,
+      userFeedback: data['userFeedback'] as String?,
+      recommendationsDismissed:
+          data['recommendationsDismissed'] as bool? ?? false,
+    );
+  }
+
+  factory AIReflection.fromJson(Map<String, dynamic> json) {
+    return AIReflection.fromFirestore(json);
+  }
 }
+

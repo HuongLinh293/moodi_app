@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -307,7 +309,7 @@ class _HomeShellState extends State<HomeShell> {
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      'L',
+                      state.userInitial,
                       style: AppTypography.button.copyWith(
                         fontSize: 13,
                         color: AppColors.yellow,
@@ -373,7 +375,7 @@ class _HomeShellState extends State<HomeShell> {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        'L',
+                        state.userInitial,
                         style: AppTypography.headlineMedium.copyWith(
                           color: AppColors.yellow,
                         ),
@@ -384,14 +386,16 @@ class _HomeShellState extends State<HomeShell> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Linh',
+                          state.userName,
                           style: AppTypography.titleLarge.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          state.userEmail,
+                          state.userEmail.isEmpty
+                              ? 'Tài khoản khách'
+                              : state.userEmail,
                           style: AppTypography.bodySmall.copyWith(
                             color: AppColors.textMuted,
                           ),
@@ -587,7 +591,7 @@ class _HomeShellState extends State<HomeShell> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              state.logout();
+              unawaited(state.logout());
             },
             child: const Text('Đăng xuất'),
           ),
@@ -834,7 +838,7 @@ class _HomeShellState extends State<HomeShell> {
     MindraMotion motion,
   ) {
     final textScale = MediaQuery.textScalerOf(context).scale(9) / 9;
-    final navHeight = textScale > 1 ? 78 + 28 * (textScale - 1) : 78.0;
+    final navContentHeight = textScale > 1 ? 52 + 16 * (textScale - 1) : 52.0;
     final items = [
       (icon: CupertinoIcons.house, label: 'Hôm nay'),
       (icon: CupertinoIcons.book, label: 'Nhật ký'),
@@ -842,15 +846,21 @@ class _HomeShellState extends State<HomeShell> {
       (icon: CupertinoIcons.compass, label: 'Khám phá'),
     ];
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-        child: ColoredBox(
-          color: AppColors.paper,
-          child: SizedBox(
-            height: navHeight,
-            child: Row(
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.paper,
+        border: Border(
+          top: BorderSide(
+            color: AppColors.line.withValues(alpha: 0.6),
+            width: 0.6,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: navContentHeight,
+          child: Row(
               children: items.asMap().entries.map((entry) {
                 final index = entry.key;
                 final item = entry.value;
@@ -865,20 +875,16 @@ class _HomeShellState extends State<HomeShell> {
                       color: Colors.transparent,
                       child: InkWell(
                         onTap: () => state.setTab(index),
-                        borderRadius: BorderRadius.circular(14),
-                        child: AnimatedContainer(
-                          duration: motion.duration,
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 7,
-                          ),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 item.icon,
-                                size: 24,
+                                size: 22,
                                 shadows: isActive
                                     ? const [
                                         Shadow(
@@ -895,7 +901,7 @@ class _HomeShellState extends State<HomeShell> {
                                     ? AppColors.orange
                                     : AppColors.textMuted,
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               FittedBox(
                                 fit: BoxFit.scaleDown,
                                 child: Text(
@@ -925,8 +931,7 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _cornerChip({

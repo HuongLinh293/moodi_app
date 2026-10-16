@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/garden_layout.dart';
@@ -7,24 +9,100 @@ import '../models/emotion.dart';
 import '../models/garden_moment.dart';
 import '../models/journal_entry.dart';
 import '../models/micro_goal.dart';
-import '../data/mock_data.dart';
+import '../repositories/auth_repository.dart';
+import '../repositories/garden_repository.dart';
+import '../repositories/journal_repository.dart';
+import '../repositories/reflection_repository.dart';
 
 enum DemoScenario { firstLaunch, returning, active }
 
 class MindraState extends ChangeNotifier {
+  final AuthRepository _authRepository;
+  final JournalRepository _journalRepository;
+  final GardenRepository _gardenRepository;
+  final ReflectionRepository _reflectionRepository;
+
+  StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<List<JournalEntry>>? _entriesSubscription;
+  StreamSubscription<List<GardenMoment>>? _gardenSubscription;
+
   String _selectedEmotionKey = 'happy';
   int _currentIntensity = 3;
   int _currentTab = 0;
   DemoScenario _demoScenario = DemoScenario.active;
-  final List<JournalEntry> _entries = MockData.getInitialEntries();
+  final List<JournalEntry> _entries = [];
   final Map<String, AIReflection> _aiReflections = {};
   final List<GardenMoment> _gardenMoments = [];
 
-  MindraState() {
-    final entry = _entryForDay(DateTime.now());
-    if (entry != null) _selectedEmotionKey = entry.emotionKey;
-    _seedGardenFromEntries(_entries.take(8));
+  MindraState({
+    AuthRepository? authRepository,
+    JournalRepository? journalRepository,
+    GardenRepository? gardenRepository,
+    ReflectionRepository? reflectionRepository,
+    List<JournalEntry>? initialEntries,
+    List<MicroGoal>? initialMicroGoals,
+    bool? isAuthenticated,
+  })  : _authRepository = authRepository ?? AuthRepository(),
+        _journalRepository = journalRepository ?? JournalRepository(),
+        _gardenRepository = gardenRepository ?? GardenRepository(),
+        _reflectionRepository = reflectionRepository ?? ReflectionRepository() {
+    if (initialEntries != null && initialEntries.isNotEmpty) {
+      _entries.addAll(initialEntries);
+      final entry = _entryForDay(DateTime.now());
+      if (entry != null) _selectedEmotionKey = entry.emotionKey;
+      _seedGardenFromEntries(_entries.take(8));
+      _isAuthenticated = isAuthenticated ?? true;
+      _onboardingCompleted = true;
+      _userEmail = 'ban@mindra.app';
+    } else {
+      // 100% REAL DATA MODE: Bỏ toàn bộ mock data, đồng bộ trực tiếp với Firebase
+      final user = _authRepository.currentUser;
+      if (user != null) {
+        _isAuthenticated = isAuthenticated ?? true;
+        _onboardingCompleted = true;
+        _userEmail = user.email ??
+            (user.isAnonymous ? 'Khách ẩn danh' : 'Người dùng');
+        _userName = user.displayName ?? '';
+        _startFirestoreListeners(user.uid);
+      } else {
+        _isAuthenticated = isAuthenticated ?? false;
+        _onboardingCompleted = false;
+        _userEmail = '';
+        _userName = '';
+      }
+
+      // Lắng nghe thay đổi trạng thái đăng nhập Firebase trong suốt phiên dùng
+      _authSubscription = _authRepository.authStateChanges.listen((u) {
+        if (u != null) {
+          _isAuthenticated = true;
+          _userEmail =
+              u.email ?? (u.isAnonymous ? 'Khách ẩn danh' : 'Người dùng');
+          _userName = u.displayName ?? '';
+          _startFirestoreListeners(u.uid);
+          notifyListeners();
+        } else {
+          _isAuthenticated = false;
+          _userEmail = '';
+          _userName = '';
+          _entriesSubscription?.cancel();
+          _gardenSubscription?.cancel();
+          _entries.clear();
+          _gardenMoments.clear();
+          _microGoals.clear();
+          notifyListeners();
+        }
+      });
+    }
+
+    if (initialMicroGoals != null && initialMicroGoals.isNotEmpty) {
+      _microGoals.addAll(initialMicroGoals);
+    }
   }
+
+  AuthRepository get authRepository => _authRepository;
+  JournalRepository get journalRepository => _journalRepository;
+  GardenRepository get gardenRepository => _gardenRepository;
+  ReflectionRepository get reflectionRepository => _reflectionRepository;
 
   String get selectedEmotionKey => _selectedEmotionKey;
   EmotionInfo get selectedEmotion => MindraEmotions.get(_selectedEmotionKey);
@@ -216,6 +294,11 @@ class MindraState extends ChangeNotifier {
   void addEntry(JournalEntry entry) {
     _entries.insert(0, entry);
     notifyListeners();
+    _journalRepository
+        .saveEntry(entry, userId: _authRepository.currentUserId)
+        .catchError((e) {
+      debugPrint('MindraState: Error syncing addEntry to Firestore ($e)');
+    });
   }
 
   void updateEntry(JournalEntry entry) {
@@ -223,6 +306,11 @@ class MindraState extends ChangeNotifier {
     if (index != -1) {
       _entries[index] = entry;
       notifyListeners();
+      _journalRepository
+          .saveEntry(entry, userId: _authRepository.currentUserId)
+          .catchError((e) {
+        debugPrint('MindraState: Error syncing updateEntry to Firestore ($e)');
+      });
     }
   }
 
@@ -230,6 +318,11 @@ class MindraState extends ChangeNotifier {
     _entries.removeWhere((e) => e.id == id);
     _gardenMoments.removeWhere((moment) => moment.entryId == id);
     notifyListeners();
+    _journalRepository
+        .deleteEntry(id, userId: _authRepository.currentUserId)
+        .catchError((e) {
+      debugPrint('MindraState: Error syncing removeEntry to Firestore ($e)');
+    });
   }
 
   JournalEntry? entryById(String id) {
@@ -308,6 +401,11 @@ class MindraState extends ChangeNotifier {
       appearanceVariant: entryId.hashCode.abs() % 3,
     );
     _gardenMoments.add(moment);
+    _gardenRepository
+        .saveMoment(moment, userId: _authRepository.currentUserId)
+        .catchError((e) {
+      debugPrint('MindraState: Error syncing moment to Firestore ($e)');
+    });
     if (notify) notifyListeners();
     return moment;
   }
@@ -473,7 +571,7 @@ class MindraState extends ChangeNotifier {
   }
 
   // Onboarding (S01–S04)
-  bool _onboardingCompleted = true;
+  bool _onboardingCompleted = false;
   bool get onboardingCompleted => _onboardingCompleted;
 
   void completeOnboarding() {
@@ -487,13 +585,7 @@ class MindraState extends ChangeNotifier {
   }
 
   // Micro-Goals (S11, S11-G)
-  final List<MicroGoal> _microGoals = [
-    MicroGoal(
-      id: 'mg-1',
-      prompt: 'Khi cảm thấy căng thẳng dồn dập, tôi sẽ dừng lại 30 giây và hít thở sâu 3 nhịp.',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-  ];
+  final List<MicroGoal> _microGoals = [];
   List<MicroGoal> get microGoals => List.unmodifiable(_microGoals);
 
   void addMicroGoal(String prompt) {
@@ -567,24 +659,58 @@ class MindraState extends ChangeNotifier {
   }
 
   // Authentication (S01.5)
-  bool _isAuthenticated =
-      true; // default true for existing local state or when initialized
-  String _userEmail = 'ban@mindra.app';
+  bool _isAuthenticated = false;
+  String _userEmail = '';
+  String _userName = '';
+
   bool get isAuthenticated => _isAuthenticated;
   String get userEmail => _userEmail;
 
-  void authenticate([String? email]) {
+  String get userName {
+    if (_userName.trim().isNotEmpty) return _userName.trim();
+    if (_userEmail.isNotEmpty && _userEmail.contains('@')) {
+      final prefix = _userEmail.split('@').first;
+      if (prefix.isNotEmpty) {
+        return prefix[0].toUpperCase() + prefix.substring(1);
+      }
+    }
+    return _userEmail.isNotEmpty ? _userEmail : 'Bạn';
+  }
+
+  String get userInitial {
+    final name = userName;
+    return name.isNotEmpty ? name[0].toUpperCase() : 'B';
+  }
+
+  void authenticate([String? email, String? name]) {
     _isAuthenticated = true;
     if (email != null && email.trim().isNotEmpty) {
       _userEmail = email.trim();
     }
+    if (name != null && name.trim().isNotEmpty) {
+      _userName = name.trim();
+    } else if (email != null && email.contains('@')) {
+      final prefix = email.split('@').first;
+      _userName = prefix.isNotEmpty
+          ? prefix[0].toUpperCase() + prefix.substring(1)
+          : '';
+    }
     notifyListeners();
   }
 
-  void logout() {
+  Future<void> logout() async {
+    _entriesSubscription?.cancel();
+    _gardenSubscription?.cancel();
+    // Sign out từ Firebase (fire-and-forget nếu lỗi)
+    await authRepository.signOut();
     _isAuthenticated = false;
-    _onboardingCompleted = false;
+    _onboardingCompleted = true;
     _demoScenario = DemoScenario.firstLaunch;
+    _entries.clear();
+    _gardenMoments.clear();
+    _microGoals.clear();
+    _userEmail = '';
+    _userName = '';
     notifyListeners();
   }
 
@@ -607,31 +733,20 @@ class MindraState extends ChangeNotifier {
     switch (scenario) {
       case DemoScenario.firstLaunch:
         _entries.clear();
+        _gardenMoments.clear();
         _onboardingCompleted = false;
         _isAuthenticated = false;
         _selectedEmotionKey = 'calm';
         _currentIntensity = 3;
         break;
       case DemoScenario.returning:
-        _entries
-          ..clear()
-          ..addAll(MockData.getInitialEntries().take(2));
-        _seedGardenFromEntries(_entries);
-        _onboardingCompleted = true;
-        _isAuthenticated = true;
-        _selectedEmotionKey = _entries.first.emotionKey;
-        _currentIntensity = _entries.first.intensity;
-        break;
       case DemoScenario.active:
-        _entries
-          ..clear()
-          ..addAll(MockData.getInitialEntries());
-        _seedGardenFromEntries(_entries.take(8));
+        _entries.clear();
+        _gardenMoments.clear();
         _onboardingCompleted = true;
         _isAuthenticated = true;
-        final today = _entryForDay(DateTime.now());
-        _selectedEmotionKey = today?.emotionKey ?? 'happy';
-        _currentIntensity = today?.intensity ?? 3;
+        _selectedEmotionKey = 'calm';
+        _currentIntensity = 3;
         break;
     }
     notifyListeners();
@@ -643,5 +758,82 @@ class MindraState extends ChangeNotifier {
           entry.timestamp.month == day.month &&
           entry.timestamp.day == day.day;
     }).firstOrNull;
+  }
+
+  Future<AIReflection> fetchOrGenerateAIReflection(JournalEntry entry) async {
+    final cached = reflectionForEntry(entry.id);
+    if (cached != null) return cached;
+    final generated = await _reflectionRepository.generateReflection(
+      emotionKey: entry.emotionKey,
+      intensity: entry.intensity,
+      situation: entry.situation,
+      thought: entry.thought,
+    );
+    cacheAIReflection(entry.id, generated);
+    notifyListeners();
+    return generated;
+  }
+
+  void _startFirestoreListeners(String userId) {
+    _entriesSubscription?.cancel();
+    _gardenSubscription?.cancel();
+
+    _entriesSubscription =
+        _journalRepository.watchEntries(userId: userId).listen(
+      (remoteEntries) {
+        _entries
+          ..clear()
+          ..addAll(remoteEntries);
+        final today = _entryForDay(DateTime.now());
+        if (today != null) _selectedEmotionKey = today.emotionKey;
+        notifyListeners();
+      },
+      onError: (e) {
+        debugPrint('MindraState: Error watching entries ($e)');
+      },
+    );
+
+    _gardenSubscription =
+        _gardenRepository.watchMoments(userId: userId).listen(
+      (remoteMoments) {
+        _gardenMoments
+          ..clear()
+          ..addAll(remoteMoments);
+        notifyListeners();
+      },
+      onError: (e) {
+        debugPrint('MindraState: Error watching moments ($e)');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    _entriesSubscription?.cancel();
+    _gardenSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> syncFromFirestore() async {
+    final uid = _authRepository.currentUserId;
+    if (uid == null) return;
+    try {
+      final remoteEntries = await _journalRepository.fetchEntries(userId: uid);
+      if (remoteEntries.isNotEmpty) {
+        _entries
+          ..clear()
+          ..addAll(remoteEntries);
+      }
+      final remoteMoments = await _gardenRepository.fetchMoments(userId: uid);
+      if (remoteMoments.isNotEmpty) {
+        _gardenMoments
+          ..clear()
+          ..addAll(remoteMoments);
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('MindraState: Error in syncFromFirestore ($e)');
+    }
   }
 }

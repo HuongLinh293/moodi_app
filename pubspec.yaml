@@ -38,6 +38,13 @@ dependencies:
   intl: ^0.20.3
   provider: ^6.1.5+1
   flutter_svg: ^2.3.0
+  # Keep Firebase iOS on 12.x while google_sign_in_ios uses GoogleSignIn 9.x.
+  # Firebase iOS 13 requires incompatible AppCheck / GTMSessionFetcher versions.
+  firebase_core: ^4.15.0
+  cloud_firestore: ^6.10.0
+  firebase_auth: ^6.7.0
+  cloud_functions: ^6.5.0
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:

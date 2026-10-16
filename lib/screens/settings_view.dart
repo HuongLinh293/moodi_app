@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -8,7 +9,6 @@ import '../core/theme/motion.dart';
 import '../core/theme/shadows.dart';
 import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
-import 'onboarding_view.dart';
 
 class SettingsView extends StatelessWidget {
   final MindraState state;
@@ -71,13 +71,33 @@ class SettingsView extends StatelessWidget {
           _buildSafetyAndCrisisSection(context),
           const SizedBox(height: 24),
 
-          // 6. Demo frontend
-          _buildDemoSection(context),
-          const SizedBox(height: 24),
-
-          // 7. Thông tin ứng dụng (About)
+          // 6. Thông tin ứng dụng (About)
           _buildAboutSection(context),
           const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutSection(BuildContext context) {
+    return Center(
+      child: Column(
+        children: [
+          Text(
+            'Mindra v1.0.0 (MVP+)',
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Hiểu cảm xúc. Chủ động chọn cách phản hồi.',
+            style: AppTypography.caption.copyWith(
+              fontStyle: FontStyle.italic,
+              color: AppColors.textMuted,
+            ),
+          ),
         ],
       ),
     );
@@ -203,8 +223,9 @@ class SettingsView extends StatelessWidget {
               ),
             ),
             onPressed: () {
-              Navigator.pop(ctx);
-              state.logout();
+              Navigator.pop(ctx); // Đóng dialog xác nhận
+              Navigator.of(context).pop(); // Đóng màn hình Cài đặt
+              unawaited(state.logout());
             },
             child: const Text('Đăng xuất'),
           ),
@@ -680,129 +701,6 @@ class SettingsView extends StatelessWidget {
     );
   }
 
-  Widget _buildDemoSection(BuildContext context) {
-    final scenarios = [
-      (
-        value: DemoScenario.firstLaunch,
-        label: 'Lần đầu',
-        desc: 'Mở onboarding như người dùng mới',
-      ),
-      (
-        value: DemoScenario.returning,
-        label: 'Quay lại',
-        desc: 'Đã onboard, dữ liệu ít',
-      ),
-      (
-        value: DemoScenario.active,
-        label: 'Đang dùng',
-        desc: 'Có nhật ký mẫu đầy đủ',
-      ),
-    ];
-
-    return _buildSectionCard(
-      title: 'BẢN THỬ NGHIỆM',
-      icon: Icons.science_outlined,
-      children: [
-        Text(
-          'Chuyển scenario để xem first launch, returning user hoặc active user. Backend chưa cần thiết.',
-          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: scenarios.map((item) {
-            final selected = state.demoScenario == item.value;
-            return FilterChip(
-              selected: selected,
-              label: Text(item.label),
-              onSelected: (_) {
-                MindraMotion.of(state.lowStimulationMode).selection();
-                state.applyDemoScenario(item.value);
-              },
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          scenarios.firstWhere((item) => item.value == state.demoScenario).desc,
-          style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      OnboardingView(onFinished: () => Navigator.pop(context)),
-                ),
-              );
-            },
-            icon: const Icon(Icons.play_circle_outline_rounded, size: 18),
-            label: const Text('Xem lại onboarding'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.ink,
-              side: const BorderSide(color: AppColors.ink),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 7. Thông tin ứng dụng (About)
-  Widget _buildAboutSection(BuildContext context) {
-    return Center(
-      child: Column(
-        children: [
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      OnboardingView(onFinished: () => Navigator.pop(context)),
-                ),
-              );
-            },
-            icon: const Icon(Icons.explore_outlined, size: 18),
-            label: const Text('Xem lại giới thiệu & mục tiêu (Onboarding)'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.ink,
-              side: const BorderSide(color: AppColors.line),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Mindra v1.0.0 (MVP+)',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textTertiary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Hiểu cảm xúc. Chủ động chọn cách phản hồi.',
-            style: AppTypography.caption.copyWith(
-              fontStyle: FontStyle.italic,
-              color: AppColors.textMuted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSectionCard({
     required String title,
     required IconData icon,
@@ -934,4 +832,5 @@ class SettingsView extends StatelessWidget {
       ),
     );
   }
+
 }

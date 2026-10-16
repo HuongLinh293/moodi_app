@@ -19,11 +19,6 @@ class _OnboardingViewState extends State<OnboardingView> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  // Auth state
-  bool _isLoginMode = false;
-  final TextEditingController _emailCtrl = TextEditingController();
-  final TextEditingController _passCtrl = TextEditingController();
-
   // S02 Goals state
   final Set<String> _selectedGoals = {
     'Hiểu cảm xúc của tôi',
@@ -44,8 +39,6 @@ class _OnboardingViewState extends State<OnboardingView> {
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
-    _passCtrl.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -57,7 +50,7 @@ class _OnboardingViewState extends State<OnboardingView> {
   void _nextPage() {
     final motion = _motion(context);
     motion.light();
-    if (_currentPage < 4) {
+    if (_currentPage < 3) {
       _pageController.animateToPage(
         _currentPage + 1,
         duration: motion.mediumDuration,
@@ -93,7 +86,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
 
     state.completeOnboarding();
-    state.authenticate();
+    // Không authenticate ở đây — sau onboarding sẽ chuyển đến LoginView thật
     if (widget.onFinished != null) {
       widget.onFinished!();
     }
@@ -342,7 +335,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (index) {
+                      children: List.generate(4, (index) {
                         final isActive = index == _currentPage;
                         return AnimatedContainer(
                           duration: _motion(context).mediumDuration,
@@ -370,7 +363,6 @@ class _OnboardingViewState extends State<OnboardingView> {
                 onPageChanged: (page) => setState(() => _currentPage = page),
                 children: [
                   _buildS01Welcome(),
-                  _buildS01_5Auth(state),
                   _buildS02Goals(),
                   _buildS03Reminders(),
                   _buildS04Safety(state),
@@ -488,257 +480,6 @@ class _OnboardingViewState extends State<OnboardingView> {
             ),
           ),
           const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  // S01.5: Auth Screen
-  Widget _buildS01_5Auth(MindraState state) {
-    return SingleChildScrollView(
-      physics: _motion(context).scrollPhysics,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 16),
-          Text(
-            'TÀI KHOẢN & ĐỒNG BỘ',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.blue,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _isLoginMode ? 'Đăng nhập Mindra' : 'Tạo tài khoản mới',
-            style: AppTypography.displayLarge.copyWith(
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _isLoginMode
-                ? 'Chào mừng bạn trở lại. Hành trình cảm xúc của bạn luôn được bảo vệ.'
-                : 'Đăng ký để lưu giữ an toàn mọi chiêm nghiệm và đồng bộ khu vườn tâm trí.',
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Social Quick Login
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    _motion(context).light();
-                    state.authenticate('google_user@mindra.app');
-                    _nextPage();
-                  },
-                  icon: const Icon(
-                    Icons.g_mobiledata_rounded,
-                    size: 24,
-                    color: AppColors.ink,
-                  ),
-                  label: const Text(
-                    'Google',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.ink,
-                    side: const BorderSide(color: AppColors.line),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    _motion(context).light();
-                    state.authenticate('apple_user@mindra.app');
-                    _nextPage();
-                  },
-                  icon: const Icon(
-                    Icons.apple_rounded,
-                    size: 20,
-                    color: AppColors.ink,
-                  ),
-                  label: const Text(
-                    'Apple',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.ink,
-                    side: const BorderSide(color: AppColors.line),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Expanded(child: Divider(color: AppColors.line)),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  'HOẶC VỚI EMAIL',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textTertiary,
-                  ),
-                ),
-              ),
-              const Expanded(child: Divider(color: AppColors.line)),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          TextField(
-            controller: _emailCtrl,
-            decoration: InputDecoration(
-              labelText: 'Email của bạn',
-              hintText: 'vidu@email.com',
-              prefixIcon: const Icon(
-                Icons.mail_outline_rounded,
-                size: 20,
-                color: AppColors.textMuted,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.line),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.line),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.ink, width: 2),
-              ),
-              filled: true,
-              fillColor: AppColors.cream,
-            ),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _passCtrl,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: 'Mật khẩu',
-              hintText: 'Tối thiểu 6 ký tự',
-              prefixIcon: const Icon(
-                Icons.lock_outline_rounded,
-                size: 20,
-                color: AppColors.textMuted,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.line),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.line),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: AppColors.ink, width: 2),
-              ),
-              filled: true,
-              fillColor: AppColors.cream,
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                final email = _emailCtrl.text.trim();
-                final pass = _passCtrl.text.trim();
-                if (email.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text(
-                        'Vui lòng nhập địa chỉ email của bạn.',
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      backgroundColor: Colors.red.shade700,
-                    ),
-                  );
-                  return;
-                }
-                if (pass.length < 6) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Mật khẩu cần có ít nhất 6 ký tự.'),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      backgroundColor: Colors.red.shade700,
-                    ),
-                  );
-                  return;
-                }
-
-                _motion(context).medium();
-                state.authenticate(email);
-                _nextPage();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.ink,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                elevation: 0,
-              ),
-              child: Text(
-                _isLoginMode ? 'Đăng nhập' : 'Tạo tài khoản & Tiếp tục',
-                style: AppTypography.button.copyWith(fontSize: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                _motion(context).selection();
-                setState(() {
-                  _isLoginMode = !_isLoginMode;
-                });
-              },
-              child: Text(
-                _isLoginMode
-                    ? 'Chưa có tài khoản? Đăng ký ngay'
-                    : 'Đã có tài khoản? Đăng nhập',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w600,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
         ],
       ),
     );

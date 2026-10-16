@@ -1,6 +1,6 @@
-import '../models/journal_entry.dart';
+import 'package:mindra/models/journal_entry.dart';
 
-class MockData {
+class TestData {
   static List<JournalEntry> getInitialEntries() {
     final now = DateTime.now();
     return [
@@ -99,38 +99,6 @@ class MockData {
         situation: 'Chạy bộ 5km buổi sáng sớm ven hồ.',
         thought: 'Cảm nhận năng lượng tươi mới tràn ngập lồng ngực.',
         response: 'Tiếp tục duy trì thói quen lành mạnh.',
-      ),
-      JournalEntry(
-        id: 'entry-8',
-        timestamp: now.subtract(const Duration(days: 15, hours: 4)),
-        emotionKey: 'calm',
-        intensity: 2,
-        trigger: 'self_care',
-        situation: 'Đọc hết cuốn sách yêu thích trong một buổi chiều mưa.',
-        thought: 'Khoảng lặng thật sự cho tâm hồn.',
-        response: 'Ghi lại một câu trích dẫn hay vào sổ.',
-      ),
-      JournalEntry(
-        id: 'entry-9',
-        timestamp: now.subtract(const Duration(days: 18, hours: 2)),
-        emotionKey: 'sad',
-        intensity: 3,
-        trigger: 'social',
-        situation: 'Hiểu lầm nhỏ với một người bạn thân.',
-        thought: 'Có lẽ mình đã diễn đạt chưa khéo.',
-        response: 'Chờ tâm trạng bình tĩnh lại rồi nhắn tin giải thích.',
-        exerciseId: 'reframe',
-        exerciseDone: true,
-      ),
-      JournalEntry(
-        id: 'entry-10',
-        timestamp: now.subtract(const Duration(days: 21, hours: 6)),
-        emotionKey: 'happy',
-        intensity: 5,
-        trigger: 'work',
-        situation: 'Dự án được khách hàng khen ngợi rất nhiều.',
-        thought: 'Sự kiên trì của cả nhóm đã được ghi nhận xứng đáng.',
-        response: 'Cùng đồng nghiệp chúc mừng thành quả.',
       ),
     ];
   }

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mindra/main.dart';
 import 'package:mindra/models/ai_reflection.dart';
 import 'package:mindra/models/journal_entry.dart';
+import 'package:mindra/models/micro_goal.dart';
 import 'package:mindra/screens/ai_reflection_view.dart';
 import 'package:mindra/screens/checkin_view.dart';
 import 'package:mindra/screens/garden_view.dart';
@@ -10,9 +11,43 @@ import 'package:mindra/screens/home_shell.dart';
 import 'package:mindra/screens/journal_view.dart';
 import 'package:mindra/screens/practice_session.dart';
 import 'package:mindra/screens/progress_view.dart';
+import 'package:mindra/screens/login_view.dart';
+import 'package:mindra/screens/onboarding_view.dart';
+import 'package:provider/provider.dart';
 import 'package:mindra/state/mindra_state.dart';
+import 'helpers/test_data.dart';
+
+MindraState createTestState() {
+  return MindraState(
+    initialEntries: TestData.getInitialEntries(),
+    initialMicroGoals: [
+      MicroGoal(
+        id: 'mg-1',
+        prompt:
+            'Khi cảm thấy căng thẳng dồn dập, tôi sẽ dừng lại 30 giây và hít thở sâu 3 nhịp.',
+        createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+    ],
+    isAuthenticated: true,
+  )..completeOnboarding();
+}
 
 void main() {
+  testWidgets('Fresh launch shows onboarding before login', (tester) async {
+    final state = MindraState();
+    addTearDown(state.dispose);
+    await tester.pumpWidget(MindraApp(state: state));
+    await tester.pumpAndSettle();
+    expect(find.byType(OnboardingView), findsOneWidget);
+    expect(find.byType(LoginView), findsNothing);
+
+    state.completeOnboarding();
+    await tester.pumpAndSettle();
+    expect(find.byType(OnboardingView), findsNothing);
+    expect(find.byType(LoginView), findsOneWidget);
+    expect(find.byType(HomeShell), findsNothing);
+  });
+
   testWidgets('Planted moment confirmation dismisses automatically', (
     tester,
   ) async {
@@ -39,7 +74,7 @@ void main() {
   testWidgets('Mindra app launches and shows HomeShell', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MindraApp());
+    await tester.pumpWidget(MindraApp(state: createTestState()));
     await tester.pumpAndSettle();
 
     // The app should render without errors
@@ -52,7 +87,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(320, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const MindraApp());
+    await tester.pumpWidget(MindraApp(state: createTestState()));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -116,7 +151,7 @@ void main() {
       tester.platformDispatcher.clearTextScaleFactorTestValue();
     });
 
-    await tester.pumpWidget(const MindraApp());
+    await tester.pumpWidget(MindraApp(state: createTestState()));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -159,7 +194,7 @@ void main() {
   testWidgets('Redesigned garden keeps every bloom tappable on small phones', (
     tester,
   ) async {
-    final state = MindraState();
+    final state = createTestState();
     addTearDown(() => tester.binding.setSurfaceSize(null));
     for (final width in [320.0, 375.0, 430.0]) {
       await tester.binding.setSurfaceSize(Size(width, 900));
@@ -218,7 +253,7 @@ void main() {
   testWidgets('Full check-in collects and saves separate reflection fields', (
     WidgetTester tester,
   ) async {
-    final state = MindraState();
+    final state = createTestState();
     final initialCount = state.entries.length;
 
     await tester.pumpWidget(
@@ -262,7 +297,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(320, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const MindraApp());
+    await tester.pumpWidget(MindraApp(state: createTestState()));
     await tester.pumpAndSettle();
 
     final notTriedButton = find.text('Chưa thử lần này');
@@ -314,7 +349,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 840));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final state = MindraState();
+    final state = createTestState();
     final entry = JournalEntry(
       id: 'reflection-test',
       timestamp: DateTime.now(),
@@ -419,7 +454,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final state = MindraState();
+    final state = createTestState();
     const config = PracticeSessionConfig(
       id: 'feedback-test',
       title: 'Bài thực hành kiểm thử',
@@ -513,7 +548,7 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final state = MindraState();
+    final state = createTestState();
     final entry = JournalEntry(
       id: 'reflection-journal-test',
       timestamp: DateTime.now(),
@@ -555,5 +590,33 @@ void main() {
     expect(find.text('Bắt đầu bài tập này'), findsNothing);
     expect(find.text('Lưu làm Micro-Goal của tôi'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('LoginView renders Google and Apple sign in buttons', (
+    WidgetTester tester,
+  ) async {
+    final state = MindraState()..clearAllData();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<MindraState>.value(
+        value: state,
+        child: const MaterialApp(
+          home: LoginView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('btn-google-sign-in')), findsOneWidget);
+    expect(find.byKey(const ValueKey('btn-apple-sign-in')), findsOneWidget);
+    expect(find.text('Tiếp tục với Google'), findsOneWidget);
+    expect(find.text('Tiếp tục với Apple'), findsOneWidget);
+
+    // Switch to register mode
+    await tester.tap(find.byKey(const ValueKey('toggle-auth-mode')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Đăng ký bằng Google'), findsOneWidget);
+    expect(find.text('Đăng ký bằng Apple'), findsOneWidget);
+    expect(find.text('Tạo tài khoản'), findsWidgets);
   });
 }

@@ -6,10 +6,23 @@ import 'core/theme/theme.dart';
 import 'state/mindra_state.dart';
 import 'screens/app_lock_view.dart';
 import 'screens/home_shell.dart';
+import 'screens/login_view.dart';
 import 'screens/onboarding_view.dart';
 
-void main() {
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'core/emulator_config.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await connectToEmulatorIfDebug();
+  } catch (e) {
+    debugPrint('Firebase.initializeApp warning (offline or test): $e');
+  }
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -24,7 +37,8 @@ void main() {
 }
 
 class MindraApp extends StatefulWidget {
-  const MindraApp({super.key});
+  final MindraState? state;
+  const MindraApp({super.key, this.state});
 
   @override
   State<MindraApp> createState() => _MindraAppState();
@@ -35,30 +49,42 @@ class _MindraAppState extends State<MindraApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => MindraState(),
-      child: Consumer<MindraState>(
-        builder: (context, state, _) {
-          Widget home;
-          if (!(state.onboardingCompleted && state.isAuthenticated)) {
-            home = const OnboardingView();
-          } else if (state.appLockEnabled && !_unlockedThisSession) {
-            home = AppLockView(
-              state: state,
-              onUnlocked: () => setState(() => _unlockedThisSession = true),
-            );
-          } else {
-            home = const HomeShell();
-          }
-
-          return MaterialApp(
-            title: 'Moodi',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            home: home,
+    final appContent = Consumer<MindraState>(
+      builder: (context, state, _) {
+        Widget home;
+        if (!state.onboardingCompleted) {
+          home = const OnboardingView();
+        } else if (!state.isAuthenticated) {
+          // Onboarding xong nhưng chưa đăng nhập (sau logout hoặc fresh install)
+          home = const LoginView();
+        } else if (state.appLockEnabled && !_unlockedThisSession) {
+          home = AppLockView(
+            state: state,
+            onUnlocked: () => setState(() => _unlockedThisSession = true),
           );
-        },
-      ),
+        } else {
+          home = const HomeShell();
+        }
+
+        return MaterialApp(
+          title: 'Moodi',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          home: home,
+        );
+      },
+    );
+
+    if (widget.state != null) {
+      return ChangeNotifierProvider<MindraState>.value(
+        value: widget.state!,
+        child: appContent,
+      );
+    }
+
+    return ChangeNotifierProvider<MindraState>(
+      create: (_) => MindraState(),
+      child: appContent,
     );
   }
 }

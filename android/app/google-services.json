@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "1017414745880",
+    "project_id": "moodiapp-dccd9",
+    "storage_bucket": "moodiapp-dccd9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1017414745880:android:f02afa5f62e4db4f92e86d",
+        "android_client_info": {
+          "package_name": "com.mindra.mindra"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1017414745880-1900dn539ep4kg24g9d4v5oe4eroh2p7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC2sym1PSRGtcnALfWSs54eepH_ECWtflY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1017414745880-1900dn539ep4kg24g9d4v5oe4eroh2p7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1017414745880-gg3005b3ngf3a2el8oam9dm1s3i3spf2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mindra.mindra"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
