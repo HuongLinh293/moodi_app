@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 import '../core/theme/colors.dart';
 import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
+
 import 'package:flutter_svg/flutter_svg.dart';
+
 import 'home_shell.dart';
 
 // ─────────────────────────────────────────
@@ -212,13 +214,16 @@ class _LoginViewState extends State<LoginView>
     HapticFeedback.lightImpact();
     final state = context.read<MindraState>();
     try {
-      await state.authRepository.signInAnonymously();
+      final credential = await state.authRepository.signInAnonymously();
+      if (credential?.user == null) throw StateError('guest-sign-in-failed');
       if (!mounted) return;
       state.authenticate();
     } catch (_) {
       if (!mounted) return;
-      // Fallback: local only
-      state.authenticate();
+      setState(
+        () => _errorMessage =
+            'Chưa mở được phiên khách. Kiểm tra kết nối và thử lại.',
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -231,8 +236,7 @@ class _LoginViewState extends State<LoginView>
       'invalid-email' => 'Email không hợp lệ.',
       'email-already-in-use' => 'Email này đã được đăng ký. Hãy đăng nhập.',
       'weak-password' => 'Mật khẩu quá yếu. Cần ít nhất 6 ký tự.',
-      'network-request-failed' =>
-        'Không thể kết nối dịch vụ đăng nhập. Kiểm tra kết nối mạng và thử lại.',
+      'network-request-failed' => 'Không thể kết nối dịch vụ đăng nhập. Kiểm tra kết nối mạng và thử lại.',
       'too-many-requests' =>
         'Quá nhiều lần thử. Vui lòng đợi một lúc rồi thử lại.',
       'invalid-credential' => 'Email hoặc mật khẩu không đúng.',
@@ -369,12 +373,15 @@ class _LoginViewState extends State<LoginView>
       label: 'Mật khẩu',
       hint: '••••••••',
       obscureText: _obscurePass,
-      textInputAction:
-          _isRegisterMode ? TextInputAction.next : TextInputAction.done,
+      textInputAction: _isRegisterMode
+          ? TextInputAction.next
+          : TextInputAction.done,
       onSubmitted: _isRegisterMode ? null : (_) => _submit(),
       suffixIcon: IconButton(
         icon: Icon(
-          _obscurePass ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+          _obscurePass
+              ? Icons.visibility_outlined
+              : Icons.visibility_off_outlined,
           color: AppColors.textMuted,
           size: 20,
         ),
@@ -447,8 +454,9 @@ class _LoginViewState extends State<LoginView>
           backgroundColor: AppColors.ink,
           foregroundColor: AppColors.paper,
           disabledBackgroundColor: AppColors.ink.withAlpha(100),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           elevation: 0,
         ),
         child: _isLoading
@@ -515,7 +523,9 @@ class _LoginViewState extends State<LoginView>
       children: [
         _buildSocialButton(
           key: const ValueKey('btn-google-sign-in'),
-          label: _isRegisterMode ? 'Đăng ký bằng Google' : 'Tiếp tục với Google',
+          label: _isRegisterMode
+              ? 'Đăng ký bằng Google'
+              : 'Tiếp tục với Google',
           icon: SvgPicture.string(
             '''<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -532,11 +542,7 @@ class _LoginViewState extends State<LoginView>
         _buildSocialButton(
           key: const ValueKey('btn-apple-sign-in'),
           label: _isRegisterMode ? 'Đăng ký bằng Apple' : 'Tiếp tục với Apple',
-          icon: const Icon(
-            Icons.apple,
-            color: AppColors.ink,
-            size: 22,
-          ),
+          icon: const Icon(Icons.apple, color: AppColors.ink, size: 22),
           onPressed: _isLoading ? null : _signInWithApple,
         ),
       ],
@@ -569,11 +575,14 @@ class _LoginViewState extends State<LoginView>
           children: [
             icon,
             const SizedBox(width: 12),
-            Text(
-              label,
-              style: AppTypography.button.copyWith(
-                color: AppColors.ink,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: AppTypography.button.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -591,8 +600,9 @@ class _LoginViewState extends State<LoginView>
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.ink,
           side: const BorderSide(color: AppColors.line, width: 1.5),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
         child: Text(
           'Tiếp tục không cần tài khoản',
@@ -605,7 +615,7 @@ class _LoginViewState extends State<LoginView>
   Widget _buildAnonNote() {
     return Center(
       child: Text(
-        'Dữ liệu sẽ chỉ lưu trên thiết bị này.',
+        'Chế độ khách dùng tài khoản ẩn danh và đồng bộ lên Firebase. Không đảm bảo khôi phục sau khi đăng xuất hoặc đổi thiết bị.',
         style: AppTypography.caption,
         textAlign: TextAlign.center,
       ),
@@ -644,7 +654,10 @@ class _InputField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTypography.caption.copyWith(color: AppColors.ink)),
+        Text(
+          label,
+          style: AppTypography.caption.copyWith(color: AppColors.ink),
+        ),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -656,13 +669,16 @@ class _InputField extends StatelessWidget {
           style: AppTypography.bodyLarge.copyWith(color: AppColors.ink),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle:
-                AppTypography.bodyLarge.copyWith(color: AppColors.textTertiary),
+            hintStyle: AppTypography.bodyLarge.copyWith(
+              color: AppColors.textTertiary,
+            ),
             suffixIcon: suffixIcon,
             filled: true,
             fillColor: AppColors.cream,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppColors.line, width: 1.5),

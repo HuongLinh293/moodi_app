@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+
 import '../models/journal_entry.dart';
 
 class JournalRepository {
@@ -43,13 +44,22 @@ class JournalRepository {
           .toList();
     } catch (e) {
       debugPrint('JournalRepository: Error fetching entries $e');
-      return [];
+      rethrow;
     }
   }
 
   Future<void> deleteEntry(String entryId, {String? userId}) async {
     try {
-      await _entriesCollection(userId).doc(entryId).delete();
+      final batch = _instance.batch();
+      batch.delete(_entriesCollection(userId).doc(entryId));
+      final moments = userId == null
+          ? _instance.collection('garden_moments')
+          : _instance
+                .collection('users')
+                .doc(userId)
+                .collection('garden_moments');
+      batch.delete(moments.doc('garden-$entryId'));
+      await batch.commit();
     } catch (e) {
       debugPrint('JournalRepository: Error deleting entry $e');
       rethrow;
@@ -61,9 +71,11 @@ class JournalRepository {
       return _entriesCollection(userId)
           .orderBy('timestamp', descending: true)
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => JournalEntry.fromFirestore(doc.data(), doc.id))
-              .toList());
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => JournalEntry.fromFirestore(doc.data(), doc.id))
+                .toList(),
+          );
     } catch (e) {
       debugPrint('JournalRepository: Error watching entries $e');
       return const Stream.empty();

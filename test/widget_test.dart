@@ -15,6 +15,7 @@ import 'package:mindra/screens/login_view.dart';
 import 'package:mindra/screens/onboarding_view.dart';
 import 'package:provider/provider.dart';
 import 'package:mindra/state/mindra_state.dart';
+
 import 'helpers/test_data.dart';
 
 MindraState createTestState() {
@@ -23,8 +24,7 @@ MindraState createTestState() {
     initialMicroGoals: [
       MicroGoal(
         id: 'mg-1',
-        prompt:
-            'Khi cảm thấy căng thẳng dồn dập, tôi sẽ dừng lại 30 giây và hít thở sâu 3 nhịp.',
+        prompt: 'Khi cảm thấy căng thẳng dồn dập, tôi sẽ dừng lại 30 giây và hít thở sâu 3 nhịp.',
         createdAt: DateTime.now().subtract(const Duration(days: 1)),
       ),
     ],
@@ -98,7 +98,7 @@ void main() {
     expect(find.text('Tôi'), findsOneWidget);
     expect(find.text('MOODI GARDEN'), findsOneWidget);
     expect(find.text('Xem thêm cảm xúc'), findsNothing);
-    expect(find.text('Pause Mode (30s)'), findsOneWidget);
+    expect(find.text('Nghỉ 30 giây'), findsOneWidget);
 
     final openGardenButton = find.text('Mở khu vườn');
     await tester.ensureVisible(openGardenButton);
@@ -114,8 +114,11 @@ void main() {
 
     await tester.tap(find.text('Khám phá').last);
     await tester.pumpAndSettle();
-    expect(find.text('TIẾN TRÌNH CỦA BẠN'), findsOneWidget);
     expect(find.text('Thực hành'), findsOneWidget);
+    expect(find.text('Bắt đầu viết'), findsOneWidget);
+    await tester.tap(find.text('Tiến trình'));
+    await tester.pumpAndSettle();
+    expect(find.text('TIẾN TRÌNH CỦA BẠN'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -172,7 +175,7 @@ void main() {
         situation: 'Dành 15 phút buổi sáng uống trà.',
       ),
     );
-    state.plantMoment('garden-calm');
+    await state.plantMoment('garden-calm');
 
     await tester.pumpWidget(MaterialApp(home: GardenView(state: state)));
     await tester.pumpAndSettle();
@@ -240,8 +243,7 @@ void main() {
 
       await tester.tap(find.text('Lưu check-in nhanh'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Để sau'));
-      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
 
       expect(state.entries.length, initialCount + 1);
       expect(state.entries.first.situation, isEmpty);
@@ -282,8 +284,7 @@ void main() {
     await tester.ensureVisible(find.text('Chỉ lưu check-in này'));
     await tester.tap(find.text('Chỉ lưu check-in này'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Để sau'));
-    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
 
     expect(state.entries.length, initialCount + 1);
     expect(state.entries.first.situation, 'Nhận góp ý trong buổi họp');
@@ -599,9 +600,7 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<MindraState>.value(
         value: state,
-        child: const MaterialApp(
-          home: LoginView(),
-        ),
+        child: const MaterialApp(home: LoginView()),
       ),
     );
     await tester.pumpAndSettle();

@@ -8,6 +8,7 @@ import '../core/theme/colors.dart';
 import '../core/theme/motion.dart';
 import '../core/theme/shadows.dart';
 import '../core/theme/typography.dart';
+import '../models/emotion.dart';
 import '../state/mindra_state.dart';
 import 'today_view.dart';
 import 'checkin_view.dart';
@@ -269,20 +270,20 @@ class _HomeShellState extends State<HomeShell> {
               padding: EdgeInsets.only(right: isCompact ? 6 : 10),
               child: _cornerChip(
                 child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🔥', style: TextStyle(fontSize: 12)),
-                  const SizedBox(width: 4),
-                  Text(
-                    isCompact
-                        ? '${state.consecutiveWeeks}'
-                        : '${state.consecutiveWeeks} tuần',
-                    style: AppTypography.caption.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('🔥', style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 4),
+                    Text(
+                      isCompact
+                          ? '${state.consecutiveWeeks}'
+                          : '${state.consecutiveWeeks} tuần',
+                      style: AppTypography.caption.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
                 ),
               ),
             ),
@@ -444,14 +445,14 @@ class _HomeShellState extends State<HomeShell> {
                       Column(
                         children: [
                           Text(
-                            '${state.positivePercentage.round()}%',
+                            '${state.uniqueCheckinDays}',
                             style: AppTypography.titleLarge.copyWith(
                               fontWeight: FontWeight.w800,
                               color: AppColors.mint,
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text('Tích cực / Yên', style: AppTypography.caption),
+                          Text('Ngày ghi nhận', style: AppTypography.caption),
                         ],
                       ),
                     ],
@@ -600,65 +601,186 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  void _openCheckinModal(BuildContext context, MindraState state) {
+  Future<void> _openCheckinModal(
+    BuildContext context,
+    MindraState state,
+  ) async {
+    final prevCount = state.entries.length;
     MindraMotion.of(state.lowStimulationMode).light();
-    showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (modalCtx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(modalCtx).viewInsets.bottom,
+          ),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.90,
+            decoration: const BoxDecoration(
+              color: AppColors.paper,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 42,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.ink.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 14, 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Check-in cảm xúc',
+                          style: AppTypography.titleMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            size: 22,
+                            color: AppColors.ink,
+                          ),
+                          onPressed: () => Navigator.pop(modalCtx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, color: AppColors.line),
+                  Expanded(
+                    child: CheckinView(
+                      state: state,
+                      onClose: () => Navigator.pop(modalCtx),
+                      onOpenJournal: () {
+                        Navigator.pop(modalCtx);
+                        state.setTab(1); // Calendar tab
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!context.mounted) return;
+    if (state.entries.length > prevCount) {
+      _showPlantingCelebration(context, state);
+    }
+  }
+
+  void _showPlantingCelebration(BuildContext context, MindraState state) {
+    final latestEntry = state.entries.isNotEmpty ? state.entries.first : null;
+    final emotion = latestEntry != null
+        ? MindraEmotions.get(latestEntry.emotionKey)
+        : state.selectedEmotion;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
         return Container(
-          height: MediaQuery.of(context).size.height * 0.90,
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
           decoration: const BoxDecoration(
-            color: AppColors.paper,
+            color: AppColors.cream,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: SafeArea(
             top: false,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: 12),
                 Container(
-                  width: 42,
-                  height: 5,
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.ink.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.ink.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 14, 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Check-in cảm xúc',
-                        style: AppTypography.titleMedium.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          size: 22,
-                          color: AppColors.ink,
-                        ),
-                        onPressed: () => Navigator.pop(modalCtx),
-                      ),
-                    ],
+                const SizedBox(height: 20),
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: emotion.tone.withValues(alpha: 0.35),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text('🌱', style: TextStyle(fontSize: 32)),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Đã gieo một hạt mầm bình yên',
+                  style: AppTypography.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
                   ),
                 ),
-                const Divider(height: 1, color: AppColors.line),
-                Expanded(
-                  child: CheckinView(
-                    state: state,
-                    onClose: () => Navigator.pop(modalCtx),
-                    onOpenJournal: () {
-                      Navigator.pop(modalCtx);
-                      state.setTab(1); // Calendar tab
-                    },
+                const SizedBox(height: 8),
+                Text(
+                  'Cảm xúc "${emotion.vi}" đã được ôm ấp và giữ lại trong Khu vườn tháng ${DateTime.now().month}. Cảm ơn bạn vì đã dành thời gian cho chính mình.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
                   ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                          foregroundColor: AppColors.ink,
+                          side: const BorderSide(color: AppColors.line),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text('Đóng'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          state.setTab(2); // Go to Garden tab
+                        },
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                          backgroundColor: AppColors.ink,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        icon: const Text('🌸', style: TextStyle(fontSize: 16)),
+                        label: const Text(
+                          'Xem khu vườn',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -720,7 +842,7 @@ class _HomeShellState extends State<HomeShell> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'Pause Mode',
+                                  'Khoảng nghỉ',
                                   style: AppTypography.caption.copyWith(
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.ink,
@@ -861,77 +983,77 @@ class _HomeShellState extends State<HomeShell> {
         child: SizedBox(
           height: navContentHeight,
           child: Row(
-              children: items.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                final isActive = currentTab == index;
+            children: items.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final isActive = currentTab == index;
 
-                return Expanded(
-                  child: Semantics(
-                    button: true,
-                    selected: isActive,
-                    label: '${item.label}${isActive ? ', selected' : ''}',
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => state.setTab(index),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                item.icon,
-                                size: 22,
-                                shadows: isActive
-                                    ? const [
-                                        Shadow(
-                                          color: AppColors.orange,
-                                          offset: Offset(0.35, 0),
-                                        ),
-                                        Shadow(
-                                          color: AppColors.orange,
-                                          offset: Offset(-0.35, 0),
-                                        ),
-                                      ]
-                                    : null,
-                                color: isActive
-                                    ? AppColors.orange
-                                    : AppColors.textMuted,
-                              ),
-                              const SizedBox(height: 3),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  item.label,
-                                  maxLines: 1,
-                                  textAlign: TextAlign.center,
-                                  style: AppTypography.kicker.copyWith(
-                                    fontSize: 11,
-                                    letterSpacing: 0,
-                                    color: isActive
-                                        ? AppColors.orange
-                                        : AppColors.textMuted,
-                                    fontWeight: isActive
-                                        ? FontWeight.w800
-                                        : FontWeight.w400,
-                                  ),
+              return Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: isActive,
+                  label: '${item.label}${isActive ? ', selected' : ''}',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => state.setTab(index),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              item.icon,
+                              size: 22,
+                              shadows: isActive
+                                  ? const [
+                                      Shadow(
+                                        color: AppColors.orange,
+                                        offset: Offset(0.35, 0),
+                                      ),
+                                      Shadow(
+                                        color: AppColors.orange,
+                                        offset: Offset(-0.35, 0),
+                                      ),
+                                    ]
+                                  : null,
+                              color: isActive
+                                  ? AppColors.orange
+                                  : AppColors.textMuted,
+                            ),
+                            const SizedBox(height: 3),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                item.label,
+                                maxLines: 1,
+                                textAlign: TextAlign.center,
+                                style: AppTypography.kicker.copyWith(
+                                  fontSize: 11,
+                                  letterSpacing: 0,
+                                  color: isActive
+                                      ? AppColors.orange
+                                      : AppColors.textMuted,
+                                  fontWeight: isActive
+                                      ? FontWeight.w800
+                                      : FontWeight.w400,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                );
-              }).toList(),
-            ),
+                ),
+              );
+            }).toList(),
           ),
         ),
-      );
+      ),
+    );
   }
 
   Widget _cornerChip({
@@ -947,10 +1069,7 @@ class _HomeShellState extends State<HomeShell> {
       child: Container(
         height: 52,
         padding: padding,
-        child: Center(
-          widthFactor: 1.0,
-          child: child,
-        ),
+        child: Center(widthFactor: 1.0, child: child),
       ),
     );
   }

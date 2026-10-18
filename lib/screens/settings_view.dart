@@ -42,17 +42,13 @@ class SettingsView extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Mindra tôn trọng quyền riêng tư tuyệt đối. Dữ liệu của bạn luôn thuộc về bạn.',
+            'Quản lý trải nghiệm và dữ liệu được đồng bộ trên tài khoản của bạn.',
             style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: 24),
 
           // 0. Tài khoản người dùng (S01.5 / S19)
           _buildAccountSection(context),
-          const SizedBox(height: 18),
-
-          // 1. Nhắc nhở nhẹ nhàng (S19)
-          _buildRemindersSection(context),
           const SizedBox(height: 18),
 
           // 2. Mục tiêu cá nhân (S02 / S19)
@@ -235,124 +231,6 @@ class SettingsView extends StatelessWidget {
   }
 
   // 1. Nhắc nhở nhẹ nhàng
-  Widget _buildRemindersSection(BuildContext context) {
-    return _buildSectionCard(
-      title: 'NHẮC NHỞ NHẸ NHÀNG',
-      icon: Icons.notifications_active_outlined,
-      children: [
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          activeTrackColor: AppColors.ink,
-          title: Text(
-            'Nhắc nhở dừng lại mỗi ngày',
-            style: AppTypography.bodyMedium.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          subtitle: Text(
-            'Thông báo bình tĩnh, không hối thúc hay phán xét',
-            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-          ),
-          value: state.reminderEnabled,
-          onChanged: (val) {
-            MindraMotion.of(state.lowStimulationMode).selection();
-            state.setReminderEnabled(val);
-          },
-        ),
-        if (state.reminderEnabled) ...[
-          const Divider(height: 20),
-          Text(
-            'Khung giờ thuận tiện cho bạn:',
-            style: AppTypography.caption.copyWith(
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildTimeChip('08:00', 'Buổi sáng'),
-              _buildTimeChip('14:00', 'Buổi chiều'),
-              _buildTimeChip('21:00', 'Buổi tối'),
-              ActionChip(
-                avatar: const Icon(
-                  Icons.access_time_rounded,
-                  size: 16,
-                  color: AppColors.ink,
-                ),
-                label: Text(
-                  state.reminderTime,
-                  style: AppTypography.caption.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 4,
-                ),
-                backgroundColor: AppColors.creamDark,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                onPressed: () async {
-                  MindraMotion.of(state.lowStimulationMode).selection();
-                  final parts = state.reminderTime.split(':');
-                  final initialHour = int.tryParse(parts[0]) ?? 21;
-                  final initialMinute = parts.length > 1
-                      ? (int.tryParse(parts[1]) ?? 0)
-                      : 0;
-                  final picked = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay(
-                      hour: initialHour,
-                      minute: initialMinute,
-                    ),
-                  );
-                  if (picked != null) {
-                    final h = picked.hour.toString().padLeft(2, '0');
-                    final m = picked.minute.toString().padLeft(2, '0');
-                    state.setReminderTime('$h:$m');
-                  }
-                },
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildTimeChip(String time, String label) {
-    final isSelected = state.reminderTime == time;
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: '$label lúc $time',
-      child: ChoiceChip(
-        label: Text('$label ($time)'),
-        selected: isSelected,
-        selectedColor: AppColors.ink,
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: isSelected ? AppColors.ink : AppColors.line),
-        ),
-        labelStyle: AppTypography.caption.copyWith(
-          color: isSelected ? Colors.white : AppColors.ink,
-          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-        ),
-        onSelected: (val) {
-          if (val) {
-            MindraMotion.of(state.lowStimulationMode).selection();
-            state.setReminderTime(time);
-          }
-        },
-      ),
-    );
-  }
-
   // 2. Mục tiêu cá nhân (S02 / S19)
   Widget _buildGoalsSection(BuildContext context) {
     const allGoals = [
@@ -414,13 +292,13 @@ class SettingsView extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           activeTrackColor: AppColors.mint,
           title: Text(
-            'Đồng ý dùng AI phản tư',
+            'Hiện gợi ý phản tư',
             style: AppTypography.bodyMedium.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           subtitle: Text(
-            'Cho phép AI hỗ trợ tạo góc nhìn cân bằng. Chỉ xử lý văn bản check-in tối thiểu, không gửi dữ liệu định danh.',
+            'Gợi ý hiện dựa trên mẫu có sẵn trong ứng dụng. Bạn có thể chỉnh sửa hoặc bỏ qua nội dung chưa phù hợp.',
             style: AppTypography.caption.copyWith(
               color: AppColors.textMuted,
               height: 1.3,
@@ -832,5 +710,4 @@ class SettingsView extends StatelessWidget {
       ),
     );
   }
-
 }

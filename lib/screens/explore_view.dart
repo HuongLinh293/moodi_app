@@ -22,7 +22,7 @@ class ExploreView extends StatefulWidget {
 }
 
 class _ExploreViewState extends State<ExploreView> {
-  int _section = 0;
+  int _section = 1;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +41,7 @@ class _ExploreViewState extends State<ExploreView> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Tiến trình giúp bạn nhận ra nhịp của mình. Thực hành giúp bạn chọn bước tiếp theo.',
+                'Chọn một bài thực hành, hoặc mở Tiến trình để nhìn lại các ghi chép.',
                 style: AppTypography.bodySmall,
               ),
               const SizedBox(height: 16),

@@ -47,5 +47,155 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
+
+    // Shared garden: code/name/createdAt strings, members (0..2 UIDs),
+    // memberNames keyed exactly by members. nextSlot + lastPlantId allocate
+    // flowers atomically. joinProof is a submitted capability, never an ACL.
+    // Invitations expose only gardenId on an exact authenticated GET, never LIST.
+    // A departing member MUST rotate the code and clear the previous proof.
+    function bounded(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+    function strongCode(code) { return code is string && code.matches('MD-[A-F0-9]{32}'); }
+    function gardenPath(gardenId) {
+      return /databases/$(database)/documents/shared_gardens/$(gardenId);
+    }
+    function isGardenMember(gardenId) {
+      return isAuthenticated() && request.auth.uid in get(gardenPath(gardenId)).data.members;
+    }
+    function validGarden(d) {
+      return d.keys().hasAll(['code', 'name', 'members', 'memberNames', 'createdAt'])
+        && d.keys().hasOnly(['code', 'name', 'members', 'memberNames', 'createdAt', 'nextSlot', 'lastPlantId', 'joinProof'])
+        && bounded(d.code, 64) && bounded(d.name, 80) && bounded(d.createdAt, 64)
+        && d.members is list && d.members.size() <= 2
+        && d.members.toSet().size() == d.members.size()
+        && d.memberNames is map
+        && d.memberNames.keys().hasAll(d.members) && d.memberNames.keys().hasOnly(d.members)
+        && (d.members.size() < 1 || (bounded(d.members[0], 128) && bounded(d.memberNames[d.members[0]], 80)))
+        && (d.members.size() < 2 || (bounded(d.members[1], 128) && bounded(d.memberNames[d.members[1]], 80)))
+        && d.get('nextSlot', 0) is int && d.get('nextSlot', 0) >= 0 && d.get('nextSlot', 0) <= 20000
+        && d.get('lastPlantId', '') is string && d.get('lastPlantId', '').size() <= 300
+        && d.get('joinProof', '') is string && d.get('joinProof', '').size() <= 64;
+    }
+    function invitationMatches(gardenId, code) {
+      return getAfter(/databases/$(database)/documents/shared_garden_invites/$(code)).data.gardenId == gardenId;
+    }
+    function validJoin(old, d) {
+      return !(request.auth.uid in old.members) && old.members.size() == 1
+        && strongCode(old.code) && d.joinProof == old.code
+        && d.members == old.members.concat([request.auth.uid])
+        && d.memberNames.diff(old.memberNames).affectedKeys().hasOnly([request.auth.uid])
+        && d.diff(old).affectedKeys().hasOnly(['members', 'memberNames', 'joinProof']);
+    }
+    function validLeave(old, d, gardenId) {
+      return request.auth.uid in old.members
+        && d.members == old.members.removeAll([request.auth.uid])
+        && d.memberNames.diff(old.memberNames).affectedKeys().hasOnly([request.auth.uid])
+        && strongCode(d.code) && d.code != old.code && d.joinProof == ''
+        && (d.members.size() == 0 || invitationMatches(gardenId, d.code))
+        && d.diff(old).affectedKeys().hasOnly(['members', 'memberNames', 'code', 'joinProof']);
+    }
+    function validAllocation(old, d, gardenId) {
+      let momentPath = /databases/$(database)/documents/shared_gardens/$(gardenId)/moments/$(d.lastPlantId);
+      let flower = getAfter(momentPath).data;
+      return request.auth.uid in old.members
+        && d.diff(old).affectedKeys().hasOnly(['nextSlot', 'lastPlantId'])
+        && d.nextSlot > old.get('nextSlot', 0)
+        && (!('nextSlot' in old) || d.nextSlot == old.nextSlot + 1)
+        && !exists(momentPath) && flower.authorId == request.auth.uid
+        && flower.bedIndex * 20 + flower.slotIndex == d.nextSlot - 1;
+    }
+    match /shared_gardens/{gardenId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.members;
+      allow create: if isAuthenticated() && validGarden(request.resource.data)
+        && request.resource.data.members == [request.auth.uid]
+        && strongCode(request.resource.data.code)
+        && request.resource.data.nextSlot == 0 && request.resource.data.lastPlantId == ''
+        && request.resource.data.joinProof == ''
+        && invitationMatches(gardenId, request.resource.data.code);
+      allow update: if isAuthenticated() && validGarden(request.resource.data) && (
+        validJoin(resource.data, request.resource.data)
+        || validLeave(resource.data, request.resource.data, gardenId)
+        || (request.auth.uid in resource.data.members
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code', 'joinProof'])
+          && strongCode(request.resource.data.code) && request.resource.data.code != resource.data.code
+          && request.resource.data.joinProof == '' && invitationMatches(gardenId, request.resource.data.code))
+        || validAllocation(resource.data, request.resource.data, gardenId)
+      );
+      allow delete: if false;
+
+      // Moment schema: author/content immutable; care updates are tied to an
+      // authenticated member's one-way water/sun receipt in the same transaction.
+      function validMoment(d) {
+        return d.keys().hasAll(['gardenId','authorId','authorName','emotionKey','intensity','caption','slotIndex','monthKey','plantedAt','waterCount','sunCount','lastInteraction'])
+          && d.keys().hasOnly(['gardenId','entryId','authorId','authorName','emotionKey','intensity','caption','bedIndex','slotIndex','monthKey','plantedAt','waterCount','sunCount','lastInteraction'])
+          && d.gardenId == gardenId && bounded(d.authorId, 128) && bounded(d.authorName, 80)
+          && bounded(d.emotionKey, 40) && d.intensity is int && d.intensity >= 1 && d.intensity <= 5
+          && d.caption is string && d.caption.size() <= 4000
+          && d.get('bedIndex', 0) is int && d.get('bedIndex', 0) >= 0 && d.get('bedIndex', 0) < 1000
+          && d.slotIndex is int && d.slotIndex >= 0 && d.slotIndex < 20
+          && bounded(d.monthKey, 7) && bounded(d.plantedAt, 64)
+          && d.waterCount is int && d.waterCount >= 0 && d.sunCount is int && d.sunCount >= 0
+          && (d.lastInteraction == null || (d.lastInteraction is string && d.lastInteraction.size() <= 160))
+          && bounded(d.get('entryId', 'legacy'), 128);
+      }
+      function careDelta(momentId, kind) {
+        let path = /databases/$(database)/documents/shared_gardens/$(gardenId)/moments/$(momentId)/care/$(request.auth.uid);
+        return (!exists(path) || get(path).data[kind] == false) && getAfter(path).data[kind] == true ? 1 : 0;
+      }
+      match /moments/{momentId} {
+        allow read: if isGardenMember(gardenId);
+        allow create: if isGardenMember(gardenId) && validMoment(request.resource.data)
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.authorName == get(gardenPath(gardenId)).data.memberNames[request.auth.uid]
+          && momentId == request.auth.uid + '_' + request.resource.data.entryId
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid)/journal_entries/$(request.resource.data.entryId))
+          && getAfter(gardenPath(gardenId)).data.lastPlantId == momentId
+          && getAfter(gardenPath(gardenId)).data.nextSlot == request.resource.data.bedIndex * 20 + request.resource.data.slotIndex + 1
+          && getAfter(gardenPath(gardenId)).data.nextSlot > get(gardenPath(gardenId)).data.get('nextSlot', 0)
+          && request.resource.data.waterCount == 0 && request.resource.data.sunCount == 0
+          && request.resource.data.lastInteraction == null;
+        allow update: if isGardenMember(gardenId) && validMoment(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['waterCount', 'sunCount', 'lastInteraction'])
+          && careDelta(momentId, 'water') + careDelta(momentId, 'sun') == 1
+          && request.resource.data.waterCount == resource.data.waterCount + careDelta(momentId, 'water')
+          && request.resource.data.sunCount == resource.data.sunCount + careDelta(momentId, 'sun');
+        allow delete: if false;
+        match /care/{userId} {
+          function validCare(d) {
+            return d.keys().hasAll(['water','sun']) && d.keys().hasOnly(['water','sun'])
+              && d.water is bool && d.sun is bool;
+          }
+          function validReceipt() {
+            let before = get(/databases/$(database)/documents/shared_gardens/$(gardenId)/moments/$(momentId)).data;
+            let after = getAfter(/databases/$(database)/documents/shared_gardens/$(gardenId)/moments/$(momentId)).data;
+            return after.waterCount == before.waterCount + careDelta(momentId, 'water')
+              && after.sunCount == before.sunCount + careDelta(momentId, 'sun')
+              && careDelta(momentId, 'water') + careDelta(momentId, 'sun') == 1;
+          }
+          allow read: if isOwner(userId) && isGardenMember(gardenId);
+          allow create: if isOwner(userId) && isGardenMember(gardenId) && validCare(request.resource.data) && validReceipt();
+          allow update: if isOwner(userId) && isGardenMember(gardenId) && validCare(request.resource.data)
+            && (!resource.data.water || request.resource.data.water)
+            && (!resource.data.sun || request.resource.data.sun) && validReceipt();
+          allow delete: if false;
+        }
+      }
+    }
+    match /shared_garden_invites/{code} {
+      // The unguessable invitation is a capability. Never expose membership or
+      // journal data here, and never allow listing this collection.
+      allow get: if isAuthenticated();
+      allow list: if false;
+      allow create: if isAuthenticated() && strongCode(code)
+        && request.resource.data.keys().hasAll(['gardenId'])
+        && request.resource.data.keys().hasOnly(['gardenId'])
+        && bounded(request.resource.data.gardenId, 128)
+        && (isGardenMember(request.resource.data.gardenId)
+          || request.auth.uid in getAfter(gardenPath(request.resource.data.gardenId)).data.members)
+        && getAfter(gardenPath(request.resource.data.gardenId)).data.code == code;
+      allow update: if false;
+      allow delete: if isAuthenticated() && isGardenMember(resource.data.gardenId);
+    }
   }
 }

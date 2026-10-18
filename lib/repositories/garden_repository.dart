@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+
 import '../models/garden_moment.dart';
 
 class GardenRepository {
@@ -32,6 +33,10 @@ class GardenRepository {
     }
   }
 
+  Future<void> deleteMoment(String momentId, {required String userId}) async {
+    await _momentsCollection(userId).doc(momentId).delete();
+  }
+
   Future<List<GardenMoment>> fetchMoments({String? userId}) async {
     try {
       final snapshot = await _momentsCollection(userId)
@@ -52,9 +57,11 @@ class GardenRepository {
       return _momentsCollection(userId)
           .orderBy('plantedAt', descending: true)
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => GardenMoment.fromFirestore(doc.data(), doc.id))
-              .toList());
+          .map(
+            (snapshot) => snapshot.docs
+                .map((doc) => GardenMoment.fromFirestore(doc.data(), doc.id))
+                .toList(),
+          );
     } catch (e) {
       debugPrint('GardenRepository: Error watching moments $e');
       return const Stream.empty();

@@ -8,6 +8,7 @@ import '../models/emotion.dart';
 import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
 import '../widgets/pattern_explorer_card.dart';
+import '../widgets/weekly_postcard_sheet.dart';
 import 'garden_view.dart';
 
 class ProgressView extends StatelessWidget {
@@ -208,26 +209,60 @@ class ProgressView extends StatelessWidget {
             const SizedBox(height: 14),
           ] else
             const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.ink,
-                side: BorderSide(color: AppColors.ink.withValues(alpha: 0.3)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.ink,
+                      side: BorderSide(
+                        color: AppColors.ink.withValues(alpha: 0.3),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () {
+                      MindraMotion.of(state.lowStimulationMode).light();
+                      _openWeeklyReviewSheet(context);
+                    },
+                    child: Text(
+                      hasReview ? 'Xem lại & sửa' : 'Bắt đầu nhìn lại',
+                      style: AppTypography.button.copyWith(fontSize: 13),
+                    ),
+                  ),
                 ),
               ),
-              onPressed: () {
-                MindraMotion.of(state.lowStimulationMode).light();
-                _openWeeklyReviewSheet(context);
-              },
-              child: Text(
-                hasReview ? 'Xem lại & chỉnh sửa' : 'Bắt đầu nhìn lại',
-                style: AppTypography.button.copyWith(fontSize: 14),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.ink,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () {
+                      WeeklyPostcardSheet.show(context, state);
+                    },
+                    icon: const Text('💌', style: TextStyle(fontSize: 14)),
+                    label: Text(
+                      'Bưu thiếp tuần',
+                      style: AppTypography.button.copyWith(
+                        fontSize: 13,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),

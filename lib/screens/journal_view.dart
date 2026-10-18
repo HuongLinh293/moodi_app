@@ -1,3 +1,6 @@
+import '../widgets/entry_sync_notice.dart';
+import '../core/garden_actions.dart';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -382,13 +385,13 @@ class _JournalViewState extends State<JournalView> {
                         onPressed: () {
                           MindraMotion.of(widget.state.lowStimulationMode)
                               .medium();
+                          late final String savedId;
                           if (isEditing) {
+                            savedId = existingEntry.id;
                             final updatedEntry = existingEntry.copyWith(
                               emotionKey: selectedKey,
                               intensity: intensity,
                               situation: noteController.text.trim(),
-                              thought: MindraEmotions.get(selectedKey)
-                                  .defaultThought,
                             );
                             widget.state.updateEntry(updatedEntry);
                           } else {
@@ -404,9 +407,8 @@ class _JournalViewState extends State<JournalView> {
                               emotionKey: selectedKey,
                               intensity: intensity,
                               situation: noteController.text.trim(),
-                              thought: MindraEmotions.get(selectedKey)
-                                  .defaultThought,
                             );
+                            savedId = newEntry.id;
                             widget.state.addEntry(newEntry);
                           }
                           Navigator.pop(modalContext);
@@ -416,9 +418,7 @@ class _JournalViewState extends State<JournalView> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                isEditing
-                                    ? 'Đã cập nhật nhật ký'
-                                    : 'Đã lưu vào nhật ký',
+                                widget.state.entrySaveMessage(savedId),
                               ),
                               backgroundColor: AppColors.ink,
                               behavior: SnackBarBehavior.floating,
@@ -513,8 +513,19 @@ class _JournalViewState extends State<JournalView> {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: () {
-              widget.state.removeEntry(entry.id);
+            onPressed: () async {
+              try {
+                await widget.state.removeEntry(entry.id);
+              } catch (_) {
+                if (!dialogCtx.mounted) return;
+                ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                  const SnackBar(
+                    content: Text('Chưa xóa được ghi chép. Hãy thử lại.'),
+                  ),
+                );
+                return;
+              }
+              if (!mounted || !dialogCtx.mounted) return;
               Navigator.pop(dialogCtx);
               setState(() {});
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1161,15 +1172,23 @@ class _JournalViewState extends State<JournalView> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
-                              onPressed: () {
+                              onPressed: () async {
                                 if (widget.state.isPlanted(entry.id)) {
                                   widget.state.setTab(2);
                                   return;
                                 }
-                                widget.state.plantMoment(entry.id);
+                                final success = await runGardenAction(
+                                  context,
+                                  () async {
+                                    await widget.state.plantMoment(entry.id);
+                                  },
+                                );
+                                if (!success || !context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Khoảnh khắc đã được giữ lại.'),
+                                    content: Text(
+                                      'Khoảnh khắc đã được giữ lại.',
+                                    ),
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
@@ -1704,6 +1723,14 @@ class _JournalViewState extends State<JournalView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          EntrySyncNotice(state: widget.state),
+          Text('Nhật ký của bạn', style: AppTypography.headlineMedium),
+          const SizedBox(height: 6),
+          Text(
+            'Tìm lại những điều bạn đã ghi nhận.',
+            style: AppTypography.bodySmall,
+          ),
+          const SizedBox(height: 16),
           // Nút chuyển chế độ (Lưới tháng / Dòng thời gian)
           Align(
             alignment: Alignment.centerRight,

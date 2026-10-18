@@ -25,11 +25,6 @@ class _OnboardingViewState extends State<OnboardingView> {
     'Giảm căng thẳng hằng ngày',
   };
 
-  // S03 Reminder state
-  String _selectedReminderKey =
-      'evening'; // morning, afternoon, evening, custom, none
-  TimeOfDay _customTime = const TimeOfDay(hour: 20, minute: 0);
-
   final List<String> _allGoals = const [
     'Hiểu cảm xúc của tôi',
     'Giảm căng thẳng hằng ngày',
@@ -50,7 +45,7 @@ class _OnboardingViewState extends State<OnboardingView> {
   void _nextPage() {
     final motion = _motion(context);
     motion.light();
-    if (_currentPage < 3) {
+    if (_currentPage < 2) {
       _pageController.animateToPage(
         _currentPage + 1,
         duration: motion.mediumDuration,
@@ -67,24 +62,6 @@ class _OnboardingViewState extends State<OnboardingView> {
         state.toggleGoal(goal);
       }
     }
-    // Save reminder
-    if (_selectedReminderKey == 'none') {
-      state.setReminderEnabled(false);
-    } else {
-      state.setReminderEnabled(true);
-      if (_selectedReminderKey == 'morning') {
-        state.setReminderTime('08:00');
-      } else if (_selectedReminderKey == 'afternoon') {
-        state.setReminderTime('14:00');
-      } else if (_selectedReminderKey == 'evening') {
-        state.setReminderTime('21:00');
-      } else if (_selectedReminderKey == 'custom') {
-        final h = _customTime.hour.toString().padLeft(2, '0');
-        final m = _customTime.minute.toString().padLeft(2, '0');
-        state.setReminderTime('$h:$m');
-      }
-    }
-
     state.completeOnboarding();
     // Không authenticate ở đây — sau onboarding sẽ chuyển đến LoginView thật
     if (widget.onFinished != null) {
@@ -274,8 +251,8 @@ class _OnboardingViewState extends State<OnboardingView> {
             ),
             const SizedBox(height: 16),
             Text(
-              '• Dữ liệu nhật ký được mã hóa và lưu trữ an toàn trên thiết bị của bạn.\n'
-              '• Phản tư AI chỉ sử dụng các từ khóa cảm xúc tối thiểu và không liên kết danh tính cá nhân.\n'
+              '• Ghi chép được đồng bộ lên Firebase theo tài khoản, bao gồm tài khoản khách ẩn danh.\n'
+              '• Gợi ý phản tư hiện dựa trên mẫu có sẵn trong ứng dụng, không phải phân tích AI cá nhân.\n'
               '• Không bán dữ liệu, không chia sẻ với bên thứ ba cho mục đích quảng cáo.\n'
               '• Bạn có toàn quyền xuất hoặc xóa vĩnh viễn toàn bộ dữ liệu bất kỳ lúc nào trong phần Cài đặt.',
               style: AppTypography.bodyMedium.copyWith(
@@ -335,7 +312,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                   Expanded(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(4, (index) {
+                      children: List.generate(3, (index) {
                         final isActive = index == _currentPage;
                         return AnimatedContainer(
                           duration: _motion(context).mediumDuration,
@@ -364,7 +341,6 @@ class _OnboardingViewState extends State<OnboardingView> {
                 children: [
                   _buildS01Welcome(),
                   _buildS02Goals(),
-                  _buildS03Reminders(),
                   _buildS04Safety(state),
                 ],
               ),
@@ -440,7 +416,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           ),
           const SizedBox(height: 14),
           Text(
-            'Không gian riêng tư để phản tư cảm xúc, nhận diện pattern và giảm căng thẳng hằng ngày.',
+            'Không gian riêng tư để phản tư cảm xúc, nhận ra những điều lặp lại và giảm căng thẳng hằng ngày.',
             textAlign: TextAlign.center,
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textSecondary,
@@ -620,174 +596,6 @@ class _OnboardingViewState extends State<OnboardingView> {
     );
   }
 
-  // S03: Reminders setup
-  Widget _buildS03Reminders() {
-    final reminderOptions = [
-      {
-        'key': 'morning',
-        'title': 'Buổi sáng (08:00)',
-        'desc': 'Khởi đầu ngày mới với sự tĩnh lặng',
-      },
-      {
-        'key': 'afternoon',
-        'title': 'Buổi chiều (14:00)',
-        'desc': 'Dừng lại nạp năng lượng giữa ngày',
-      },
-      {
-        'key': 'evening',
-        'title': 'Buổi tối (21:00)',
-        'desc': 'Lắng đọng và thư giãn trước giấc ngủ',
-      },
-      {
-        'key': 'custom',
-        'title': 'Giờ tùy chỉnh',
-        'desc': 'Chọn thời gian phù hợp nhất với bạn',
-      },
-      {
-        'key': 'none',
-        'title': 'Không nhắc',
-        'desc': 'Tự mở ứng dụng khi bạn muốn',
-      },
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 16),
-          Text(
-            'Nhịp điệu hằng ngày',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.mint,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Khi nào bạn muốn dừng lại?',
-            style: AppTypography.displayLarge.copyWith(
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Một lời nhắc nhẹ nhàng mỗi ngày để bạn kết nối lại với chính mình.',
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: ListView.separated(
-              itemCount: reminderOptions.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final opt = reminderOptions[index];
-                final isSelected = _selectedReminderKey == opt['key'];
-
-                return InkWell(
-                  onTap: () async {
-                    _motion(context).selection();
-                    if (opt['key'] == 'custom') {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: _customTime,
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          _customTime = picked;
-                          _selectedReminderKey = 'custom';
-                        });
-                      }
-                    } else {
-                      setState(() {
-                        _selectedReminderKey = opt['key']!;
-                      });
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.mint.withValues(alpha: 0.14)
-                          : AppColors.cream,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? AppColors.mint : AppColors.line,
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSelected
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          color: isSelected ? AppColors.ink : AppColors.line,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                opt['key'] == 'custom'
-                                    ? 'Giờ tùy chỉnh (${_customTime.format(context)})'
-                                    : opt['title']!,
-                                style: AppTypography.bodyMedium.copyWith(
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w600,
-                                  color: AppColors.ink,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                opt['desc']!,
-                                style: AppTypography.caption.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _nextPage,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.ink,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                elevation: 0,
-              ),
-              child: Text(
-                'Tiếp tục',
-                style: AppTypography.button.copyWith(fontSize: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
   // S04: Safety & Disclaimer
   Widget _buildS04Safety(MindraState state) {
     return Padding(
@@ -846,10 +654,12 @@ class _OnboardingViewState extends State<OnboardingView> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text(
-                      'Tự phản tư & hỗ trợ',
-                      style: AppTypography.titleMedium.copyWith(
-                        fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Text(
+                        'Tự phản tư & hỗ trợ',
+                        style: AppTypography.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],

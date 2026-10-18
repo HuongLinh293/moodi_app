@@ -1,3 +1,5 @@
+import '../widgets/entry_sync_notice.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import '../core/theme/colors.dart';
 import '../core/theme/shadows.dart';
 import '../core/theme/typography.dart';
 import '../models/ai_reflection.dart';
+import '../models/ai_reframing_lens.dart';
 import '../models/journal_entry.dart';
 import '../state/mindra_state.dart';
 import 'practice_session.dart';
@@ -43,6 +46,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
   late String _recommendationReason;
   late String _microGoalPrompt;
   bool _recommendationsDismissed = false;
+  ReframingLensType? _selectedLens;
 
   AIReflection get _currentReflection => _reflection.copyWith(
     possibleEmotions: _possibleEmotions,
@@ -102,7 +106,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
     });
     final delay = widget.state.lowStimulationMode
         ? const Duration(milliseconds: 200)
-        : const Duration(milliseconds: 1800);
+        : const Duration(milliseconds: 200);
     Timer(delay, () {
       if (!mounted) return;
       setState(() {
@@ -127,6 +131,23 @@ class _AIReflectionViewState extends State<AIReflectionView>
       backgroundColor: Colors.transparent,
       builder: (_) => PracticeSessionSheet(state: widget.state, config: config),
     );
+  }
+
+  void _selectReframingLens(ReframingLensType type) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (_selectedLens == type) {
+        _selectedLens = null;
+        _balancedThought = _reflection.balancedThought;
+      } else {
+        _selectedLens = type;
+        _balancedThought = ReframingLens.getThoughtFor(
+          type: type,
+          emotionKey: widget.entry.emotionKey,
+          defaultThought: _reflection.balancedThought,
+        );
+      }
+    });
   }
 
   Future<void> _openReflectionEditor() async {
@@ -391,14 +412,14 @@ class _AIReflectionViewState extends State<AIReflectionView>
               ),
               const SizedBox(height: 18),
               Text(
-                'AI phản tư đang tắt',
+                'Gợi ý phản tư đang tắt',
                 style: AppTypography.headlineMedium.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Check-in của bạn vẫn được lưu trên thiết bị. Bạn có thể bật AI phản tư trong Cài đặt khi sẵn sàng.',
+                'Bạn có thể kiểm tra ghi chép trong Nhật ký và bật gợi ý phản tư trong Cài đặt.',
                 textAlign: TextAlign.center,
                 style: AppTypography.bodyMedium,
               ),
@@ -690,7 +711,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
             const Text('✨', style: TextStyle(fontSize: 18)),
             const SizedBox(width: 6),
             Text(
-              'Phản tư nhận thức',
+              'Gợi ý phản tư',
               style: AppTypography.titleMedium.copyWith(
                 fontWeight: FontWeight.w700,
               ),
@@ -699,236 +720,63 @@ class _AIReflectionViewState extends State<AIReflectionView>
         ),
       ),
       body: SafeArea(
-        child: ListView(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          children: [
-            // Emotion tags
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _possibleEmotions.map((emo) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.cream,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.line),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.yellow,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        emo,
-                        style: AppTypography.caption.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 18),
-
-            // Card 1: Trigger & Intensifying thought
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.cream,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: AppShadows.card,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text('🔍', style: TextStyle(fontSize: 16)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Tác nhân nhận thấy',
-                        style: AppTypography.caption.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _possibleTrigger,
-                    style: AppTypography.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      const Text('💭', style: TextStyle(fontSize: 16)),
-                      Text(
-                        'Suy nghĩ có thể đang phóng đại',
-                        style: AppTypography.caption.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.orange,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '“$_intensifyingThought”',
-                    style: AppTypography.bodyMedium.copyWith(
-                      fontStyle: FontStyle.italic,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Card 2: Balanced perspective
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.mint.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: AppShadows.card,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text('🌿', style: TextStyle(fontSize: 16)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Góc nhìn cân bằng hơn',
-                        style: AppTypography.caption.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1E634F),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _balancedThought,
-                    style: AppTypography.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Card 3: Reflection question
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.blue.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: AppShadows.card,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      const Text('💡', style: TextStyle(fontSize: 16)),
-                      Text(
-                        'Câu hỏi suy ngẫm cho bạn',
-                        style: AppTypography.caption.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.blue,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _reflectionQuestion,
-                    style: AppTypography.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.ink,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // Feedback buttons (S10)
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 6,
-              runSpacing: 8,
-              children: [
-                Text(
-                  'Phản tư này:',
-                  style: AppTypography.caption.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                _buildFeedbackChip(label: 'Rất đúng 👍', key: 'accurate'),
-                _buildFeedbackChip(label: 'Cần sửa ✏️', key: 'needs_edit'),
-                _buildFeedbackChip(label: 'Chưa hợp ✕', key: 'inaccurate'),
-              ],
-            ),
-            const SizedBox(height: 24),
-            if (_userFeedback == 'inaccurate') ...[
-              Text(
-                'Không sao. Bạn có thể bỏ qua các gợi ý này.',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              EntrySyncNotice(state: widget.state),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'Gợi ý từ mẫu có sẵn, không phải phân tích AI cá nhân. Chỉ giữ điều phù hợp với bạn.',
+                  style: TextStyle(color: AppColors.textSecondary, height: 1.5),
                 ),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () {
-                    setState(() => _recommendationsDismissed = true);
-                    widget.state.updateAIReflection(
-                      widget.entry.id,
-                      _currentReflection,
-                    );
-                  },
-                  style: TextButton.styleFrom(minimumSize: const Size(44, 44)),
-                  icon: const Icon(Icons.visibility_off_outlined, size: 18),
-                  label: const Text('Bỏ qua gợi ý'),
-                ),
+              // Emotion tags
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _possibleEmotions.map((emo) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.cream,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: AppColors.yellow,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          emo,
+                          style: AppTypography.caption.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
-            ],
+              const SizedBox(height: 18),
 
-            // S11: Next Step / Recommended Exercise
-            if (!_recommendationsDismissed)
+              // Card 1: Trigger & Intensifying thought
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: AppColors.cream,
                   borderRadius: BorderRadius.circular(22),
@@ -939,79 +787,162 @@ class _AIReflectionViewState extends State<AIReflectionView>
                   children: [
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.yellow.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            '🧘',
-                            style: TextStyle(fontSize: 20),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Bước tiếp theo đề xuất',
-                                style: AppTypography.caption.copyWith(
-                                  color: AppColors.orange,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                _getExerciseTitle(_recommendedExercise),
-                                style: AppTypography.titleMedium.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
+                        const Text('🔍', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Tác nhân nhận thấy',
+                          style: AppTypography.caption.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     Text(
-                      _recommendationReason,
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.35,
+                      _possibleTrigger,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => _launchExercise(_recommendedExercise),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.ink,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                    const Divider(height: 24),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        const Text('💭', style: TextStyle(fontSize: 16)),
+                        Text(
+                          'Suy nghĩ có thể đang phóng đại',
+                          style: AppTypography.caption.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.orange,
                           ),
-                          elevation: 0,
                         ),
-                        child: Text(
-                          'Bắt đầu bài tập này',
-                          style: AppTypography.button,
-                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '“$_intensifyingThought”',
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.ink,
                       ),
                     ),
                   ],
                 ),
               ),
-            if (!_recommendationsDismissed) const SizedBox(height: 14),
+              const SizedBox(height: 14),
 
-            // S11-G: Micro-Goal
-            if (!_recommendationsDismissed && _microGoalPrompt.isNotEmpty)
+              // Card 2: Balanced perspective
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: AppColors.cream,
+                  color: AppColors.mint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: AppShadows.card,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('🌿', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Góc nhìn cân bằng hơn',
+                          style: AppTypography.caption.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF1E634F),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _balancedThought,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Divider(
+                      height: 1,
+                      color: const Color(0xFF1E634F).withValues(alpha: 0.15),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'ĐỔI LĂNG KÍNH SUY NGHĨ:',
+                      style: AppTypography.kicker.copyWith(
+                        fontSize: 10,
+                        color: const Color(0xFF1E634F),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: ReframingLens.all.map((lens) {
+                        final isSelected = _selectedLens == lens.type;
+                        return InkWell(
+                          onTap: () => _selectReframingLens(lens.type),
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFF1E634F)
+                                  : Colors.white.withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF1E634F)
+                                    : const Color(0xFF1E634F)
+                                          .withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  lens.emoji,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  lens.label,
+                                  style: AppTypography.caption.copyWith(
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF1E634F),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Card 3: Reflection question
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppColors.blue.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: AppShadows.card,
                 ),
@@ -1023,83 +954,252 @@ class _AIReflectionViewState extends State<AIReflectionView>
                       spacing: 8,
                       runSpacing: 4,
                       children: [
-                        const Text('🎯', style: TextStyle(fontSize: 18)),
+                        const Text('💡', style: TextStyle(fontSize: 16)),
                         Text(
-                          'Mục tiêu nhỏ (Micro-Goal)',
+                          'Câu hỏi suy ngẫm cho bạn',
                           style: AppTypography.caption.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.ink,
+                            color: AppColors.blue,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _microGoalPrompt,
+                      _reflectionQuestion,
                       style: AppTypography.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: AppColors.ink,
+                        height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    if (_microGoalSaved)
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.mint,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Đã lưu vào danh sách Micro-Goal',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.mint,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          widget.state.addMicroGoal(_microGoalPrompt);
-                          setState(() => _microGoalSaved = true);
-                        },
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Lưu làm Micro-Goal của tôi'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.ink,
-                          side: const BorderSide(color: AppColors.line),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-            // Done button
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  widget.onOpenJournal();
-                },
-                child: Text(
-                  'Xem trong Lịch & Nhật ký →',
-                  style: AppTypography.button.copyWith(
+              // Feedback buttons (S10)
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 8,
+                children: [
+                  Text(
+                    'Phản tư này:',
+                    style: AppTypography.caption.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  _buildFeedbackChip(label: 'Rất đúng 👍', key: 'accurate'),
+                  _buildFeedbackChip(label: 'Cần sửa ✏️', key: 'needs_edit'),
+                  _buildFeedbackChip(label: 'Chưa hợp ✕', key: 'inaccurate'),
+                ],
+              ),
+              const SizedBox(height: 24),
+              if (_userFeedback == 'inaccurate') ...[
+                Text(
+                  'Không sao. Bạn có thể bỏ qua các gợi ý này.',
+                  style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      setState(() => _recommendationsDismissed = true);
+                      widget.state.updateAIReflection(
+                        widget.entry.id,
+                        _currentReflection,
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(44, 44),
+                    ),
+                    icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                    label: const Text('Bỏ qua gợi ý'),
+                  ),
+                ),
+              ],
+
+              // S11: Next Step / Recommended Exercise
+              if (!_recommendationsDismissed)
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: AppShadows.card,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.yellow.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              '🧘',
+                              style: TextStyle(fontSize: 20),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bước tiếp theo đề xuất',
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.orange,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  _getExerciseTitle(_recommendedExercise),
+                                  style: AppTypography.titleMedium.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _recommendationReason,
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () =>
+                              _launchExercise(_recommendedExercise),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.ink,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            'Bắt đầu bài tập này',
+                            style: AppTypography.button,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (!_recommendationsDismissed) const SizedBox(height: 14),
+
+              // S11-G: Micro-Goal
+              if (!_recommendationsDismissed && _microGoalPrompt.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: AppShadows.card,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          const Text('🎯', style: TextStyle(fontSize: 18)),
+                          Text(
+                            'Một bước nhỏ',
+                            style: AppTypography.caption.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _microGoalPrompt,
+                        style: AppTypography.bodyMedium.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_microGoalSaved)
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle,
+                              color: AppColors.mint,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Đã thêm vào các bước nhỏ của bạn',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.mint,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            widget.state.addMicroGoal(_microGoalPrompt);
+                            setState(() => _microGoalSaved = true);
+                          },
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Giữ bước nhỏ này'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.ink,
+                            side: const BorderSide(color: AppColors.line),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 20),
+
+              // Done button
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onOpenJournal();
+                  },
+                  child: Text(
+                    'Xem trong Lịch & Nhật ký →',
+                    style: AppTypography.button.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -1256,6 +1356,8 @@ class _ReflectionEditSheetState extends State<_ReflectionEditSheet> {
       controller: controller,
       minLines: maxLines == 1 ? 1 : 2,
       maxLines: maxLines,
+      textCapitalization: TextCapitalization.sentences,
+      keyboardType: maxLines > 1 ? TextInputType.multiline : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
         helperText: 'Để trống để bỏ mục này',

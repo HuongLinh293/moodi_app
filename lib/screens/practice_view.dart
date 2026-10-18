@@ -5,6 +5,7 @@ import '../core/theme/motion.dart';
 import '../core/theme/shadows.dart';
 import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
+import 'paper_release_sheet.dart';
 import 'practice_session.dart';
 
 class PracticeView extends StatefulWidget {
@@ -61,11 +62,113 @@ class _PracticeViewState extends State<PracticeView> {
           ),
           const SizedBox(height: 20),
           _buildSosCard(),
+          const SizedBox(height: 16),
+          _buildPaperReleaseCard(),
           const SizedBox(height: 24),
           _buildCategoryFilter(),
           const SizedBox(height: 20),
           _buildExerciseList(),
           const SizedBox(height: 36),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaperReleaseCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBF7F0),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.orange.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.description_outlined,
+              color: AppColors.orange,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.orange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'MỘT KHOẢNG DỪNG',
+                        style: AppTypography.kicker.copyWith(
+                          color: AppColors.orange,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Vò giấy',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Viết điều trong lòng lên giấy, vò lại rồi ném đi khi bạn muốn.',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.orange,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                  ),
+                  onPressed: () {
+                    PaperReleaseSheet.show(
+                      context: context,
+                      state: widget.state,
+                    );
+                  },
+                  icon: const Icon(Icons.edit_note_rounded, size: 16),
+                  label: const Text(
+                    'Bắt đầu viết',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

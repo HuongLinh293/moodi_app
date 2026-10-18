@@ -1,3 +1,5 @@
+import '../widgets/entry_sync_notice.dart';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -11,6 +13,8 @@ import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
 import '../widgets/origami_garden.dart';
 import '../widgets/week_tracker.dart';
+import '../widgets/weekly_postcard_sheet.dart';
+import 'paper_release_sheet.dart';
 
 class TodayView extends StatelessWidget {
   final MindraState state;
@@ -60,6 +64,7 @@ class TodayView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          EntrySyncNotice(state: state),
           // 1. Intro Section
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -299,6 +304,93 @@ class TodayView extends StatelessWidget {
                       ),
                     ),
 
+                    if (selectedKey == 'angry' || selectedKey == 'stressed') ...[
+                      const SizedBox(height: 10),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {
+                            motion.light();
+                            PaperReleaseSheet.show(
+                              context: context,
+                              state: state,
+                              initialEmotionKey: selectedKey,
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDarkTone
+                                  ? Colors.white.withValues(alpha: 0.16)
+                                  : Colors.white.withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDarkTone
+                                    ? Colors.white.withValues(alpha: 0.3)
+                                    : AppColors.orange.withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text('🔥', style: TextStyle(fontSize: 18)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Cảm xúc đang quá tải?',
+                                        style: AppTypography.caption.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: isDarkTone
+                                              ? Colors.white
+                                              : AppColors.ink,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Viết trút giận & vò nát ném đi ngay.',
+                                        style: AppTypography.caption.copyWith(
+                                          color: isDarkTone
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.8,
+                                                )
+                                              : AppColors.textSecondary,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.orange,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    'Vò giấy ➔',
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -331,7 +423,41 @@ class TodayView extends StatelessWidget {
                               size: 16,
                             ),
                             label: Text(
-                              'Pause Mode (30s)',
+                              'Nghỉ 30 giây',
+                              style: AppTypography.button.copyWith(
+                                color: contentTextColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: isDarkTone
+                                ? Colors.white.withValues(alpha: 0.16)
+                                : AppColors.ink.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: TextButton.icon(
+                            onPressed: () =>
+                                WeeklyPostcardSheet.show(context, state),
+                            style: TextButton.styleFrom(
+                              foregroundColor: contentTextColor,
+                              minimumSize: const Size(44, 44),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                            icon: const Text(
+                              '💌',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            label: Text(
+                              'Bưu thiếp tuần',
                               style: AppTypography.button.copyWith(
                                 color: contentTextColor,
                                 fontWeight: FontWeight.w600,
@@ -450,13 +576,29 @@ class TodayView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // 3. Tailored practice suggestion
+          _buildPaperReleaseCard(context),
+
+          // 4. Active Micro-Goals (S05 & S11-G)
+          if (state.microGoals.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildMicroGoalsCard(context, state),
+          ],
+          // 5. Week Tracker
+          const SizedBox(height: 16),
+          WeekTrackerCard(state: state, onOpenJournal: onOpenJournal),
+          if (state.gardenVisible) ...[
+            const SizedBox(height: 16),
+            _buildGardenPreview(state),
+          ],
+
+          const SizedBox(height: 16),
+          // Tailored practice suggestion
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: AppColors.blue,
+              color: AppColors.cream,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: AppShadows.card,
+              border: Border.all(color: AppColors.line),
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -523,7 +665,7 @@ class TodayView extends StatelessWidget {
                     Text(
                       suggestion.eyebrow,
                       style: AppTypography.kicker.copyWith(
-                        color: Colors.white.withValues(alpha: 0.86),
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -531,14 +673,14 @@ class TodayView extends StatelessWidget {
                       suggestion.title,
                       style: AppTypography.headlineMedium.copyWith(
                         fontSize: 18,
-                        color: Colors.white,
+                        color: AppColors.ink,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       suggestion.description,
                       style: AppTypography.bodyMedium.copyWith(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: AppColors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -575,21 +717,143 @@ class TodayView extends StatelessWidget {
               },
             ),
           ),
-          // 4. Active Micro-Goals (S05 & S11-G)
-          if (state.microGoals.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _buildMicroGoalsCard(context, state),
-          ],
-          // 5. Week Tracker
-          const SizedBox(height: 16),
-          WeekTrackerCard(state: state, onOpenJournal: onOpenJournal),
-          if (state.gardenVisible) ...[
-            const SizedBox(height: 16),
-            _buildGardenPreview(state),
-          ],
 
           const SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPaperReleaseCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 280;
+          final illustration = ExcludeSemantics(
+            child: Container(
+              width: stacked ? double.infinity : 80,
+              height: stacked ? 88 : 130,
+              decoration: BoxDecoration(
+                color: AppColors.yellow,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: SizedBox(
+                  width: 76,
+                  height: 88,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Transform.rotate(
+                        angle: -.18,
+                        child: Container(
+                          width: 46,
+                          height: 62,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cream,
+                            borderRadius: BorderRadius.circular(3),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: AppColors.line,
+                                offset: Offset(3, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: List.generate(
+                              3,
+                              (index) => Container(
+                                width: index == 2 ? 16 : 28,
+                                height: 2,
+                                margin: const EdgeInsets.only(bottom: 7),
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Positioned(
+                        right: 0,
+                        bottom: 3,
+                        child: Icon(
+                          Icons.gesture_rounded,
+                          color: AppColors.blue,
+                          size: 32,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+          final copy = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'VÒ GIẤY',
+                style: AppTypography.kicker.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Có điều gì muốn trút ra?',
+                style: AppTypography.headlineMedium.copyWith(
+                  fontSize: 18,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Viết ra, vò lại rồi ném đi. Một tờ giấy, không cần giữ lại.',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(
+                key: const ValueKey('today-paper-release'),
+                onPressed: () =>
+                    PaperReleaseSheet.show(context: context, state: state),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.yellow,
+                  foregroundColor: AppColors.ink,
+                  elevation: 0,
+                  minimumSize: const Size(44, 44),
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                child: const Text('Viết ra ngay'),
+              ),
+            ],
+          );
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [copy, const SizedBox(height: 12), illustration],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              illustration,
+              const SizedBox(width: 14),
+              Expanded(child: copy),
+            ],
+          );
+        },
       ),
     );
   }
