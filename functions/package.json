@@ -7,7 +7,8 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test:garden": "node --test test/shared-garden.test.js"
+    "test:garden": "node --test test/shared-garden.test.js",
+    "test:security": "node --test --test-concurrency=1 test/callable-security.test.js test/security.test.js test/shared-garden.test.js test/community.test.js"
   },
   "engines": {
     "node": "24"
@@ -16,7 +17,8 @@
   "dependencies": {
     "@google/genai": "^2.30.0",
     "firebase-admin": "^13.6.0",
-    "firebase-functions": "^7.0.0"
+    "firebase-functions": "^7.0.0",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",

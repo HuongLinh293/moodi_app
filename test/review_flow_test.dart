@@ -66,7 +66,8 @@ void main() {
   });
 
   testWidgets('Quick save closes without a garden dialog', (tester) async {
-    final state = MindraState(authRepository: FailedGuestAuth());
+    final state = MindraState(authRepository: FailedGuestAuth())
+      ..selectEmotion('calm');
     addTearDown(state.dispose);
     var closed = false;
     await tester.pumpWidget(

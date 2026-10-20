@@ -342,7 +342,7 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'MINDRA POST',
+                          'MOODI POST',
                           style: AppTypography.kicker.copyWith(
                             letterSpacing: 2.0,
                             color: const Color(0xFF8C8270),
@@ -599,7 +599,7 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                         ),
                         child: Center(
                           child: Text(
-                            'MINDRA\n★ ĐÃ GỬI ★',
+                            'MOODI\n★ ĐÃ GỬI ★',
                             textAlign: TextAlign.center,
                             style: AppTypography.caption.copyWith(
                               fontSize: 8,

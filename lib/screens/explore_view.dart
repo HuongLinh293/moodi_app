@@ -29,25 +29,9 @@ class _ExploreViewState extends State<ExploreView> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('KHÁM PHÁ', style: AppTypography.kicker),
-              const SizedBox(height: 6),
-              Text(
-                'Nhìn lại và thử\nmột bước nhỏ.',
-                style: AppTypography.displayMedium.copyWith(fontSize: 30),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Chọn một bài thực hành, hoặc mở Tiến trình để nhìn lại các ghi chép.',
-                style: AppTypography.bodySmall,
-              ),
-              const SizedBox(height: 16),
-              _buildSectionSwitcher(),
-            ],
-          ),
+          // Each section has its own hero; the app bar already names the tab.
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+          child: _buildSectionSwitcher(),
         ),
         Expanded(
           child: IndexedStack(

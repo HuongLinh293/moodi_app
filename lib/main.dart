@@ -9,20 +9,9 @@ import 'screens/home_shell.dart';
 import 'screens/login_view.dart';
 import 'screens/onboarding_view.dart';
 
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'core/emulator_config.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    await connectToEmulatorIfDebug();
-  } catch (e) {
-    debugPrint('Firebase.initializeApp warning (offline or test): $e');
-  }
+  
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -67,6 +56,9 @@ class _MindraAppState extends State<MindraApp> {
         }
 
         return MaterialApp(
+          key: ValueKey(
+            '${state.isAuthenticated}:${state.currentUserId}:${state.sessionRevision}',
+          ),
           title: 'Moodi',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,

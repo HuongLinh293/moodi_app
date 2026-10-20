@@ -60,16 +60,20 @@ class FakeSharedGardenRepository extends SharedGardenRepository {
   }
 
   @override
-  Future<SharedMoment> plantEntry(String gardenId, String entryId) async {
+  Future<SharedMoment> plantEntry(
+    String gardenId,
+    String entryId, {
+    bool includeCaption = false,
+  }) async {
     check();
     final moment = SharedMoment(
-      id: 'shared-$entryId',
+      id: 'user_1_$entryId',
       gardenId: gardenId,
       authorId: 'user_1',
       authorName: 'Linh',
       emotionKey: 'calm',
       intensity: 3,
-      caption: 'Bình yên',
+      caption: includeCaption ? 'Bình yên' : '',
       bedIndex: items.length ~/ 20,
       slotIndex: items.length % 20,
       monthKey: '2026-10',
@@ -78,6 +82,23 @@ class FakeSharedGardenRepository extends SharedGardenRepository {
     items.add(moment);
     streams[gardenId]?.add(List.of(items));
     return moment;
+  }
+
+  final removed = <String>[];
+  @override
+  Future<void> removeMoment(String gardenId, String momentId) async {
+    check();
+    removed.add(momentId);
+    items.removeWhere((m) => m.id == momentId);
+    streams[gardenId]?.add(List.of(items));
+  }
+
+  @override
+  Future<void> removeMyMoments(String gardenId) async {
+    check();
+    removed.add('$gardenId/*');
+    items.removeWhere((m) => m.authorId == 'user_1');
+    streams[gardenId]?.add(List.of(items));
   }
 
   @override

@@ -63,7 +63,8 @@ const call = async (uid, data) => {
         legacyNext = Math.max(legacyNext, (snap.data().bedIndex || 0) * 20 + snap.data().slotIndex + 1);
       }
     }
-    return runTransaction(store, async tx => {
+    let attemptedPosition;
+    const execute = () => runTransaction(store, async tx => {
       const garden = (await tx.get(ref)).data();
       const old = await tx.get(momentRef);
       if (old.exists()) return {id: old.id, ...old.data()};
@@ -71,6 +72,7 @@ const call = async (uid, data) => {
       if (!entrySnap.exists()) throw {code: 'failed-precondition'};
       const entry = entrySnap.data();
       const position = garden.nextSlot ?? legacyNext;
+      attemptedPosition = position;
       const moment = {gardenId: ref.id, entryId: data.entryId, authorId: uid, authorName: garden.memberNames[uid],
         emotionKey: entry.emotionKey, intensity: entry.intensity, caption: entry.situation,
         bedIndex: Math.floor(position / 20), slotIndex: position % 20, monthKey: '2026-10', plantedAt: entry.timestamp,
@@ -79,15 +81,24 @@ const call = async (uid, data) => {
       tx.update(ref, {nextSlot: position + 1, lastPlantId: momentRef.id});
       return {id: momentRef.id, ...moment};
     });
+    for (let attempt = 0; ; attempt++) {
+      try {return await execute();} catch (error) {
+        if (error.code !== 'permission-denied' || attempt >= 2 || attemptedPosition === undefined) throw error;
+        const latest = (await getDocFromServer(ref)).data();
+        if (!latest?.members.includes(uid) || (latest.nextSlot ?? 0) <= attemptedPosition) throw error;
+      }
+    }
   }
   const momentRef = doc(collection(ref, 'moments'), data.momentId);
   const careRef = doc(collection(momentRef, 'care'), uid);
   return runTransaction(store, async tx => {
+    const garden = (await tx.get(ref)).data();
     const moment = (await tx.get(momentRef)).data();
     const receipt = (await tx.get(careRef)).data() || {water: false, sun: false};
     const kind = data.isWater ? 'water' : 'sun';
     if (receipt[kind]) return {id: momentRef.id, ...moment};
-    const change = {waterCount: moment.waterCount + (data.isWater ? 1 : 0), sunCount: moment.sunCount + (data.isWater ? 0 : 1), lastInteraction: 'Chăm sóc'};
+    const sentence = garden.memberNames[uid] + (data.isWater ? ' vừa tưới nước 💧' : ' vừa gửi tia nắng ấm ☀️');
+    const change = {waterCount: moment.waterCount + (data.isWater ? 1 : 0), sunCount: moment.sunCount + (data.isWater ? 0 : 1), lastInteraction: data.text ?? sentence};
     tx.set(careRef, {...receipt, [kind]: true});
     tx.update(momentRef, change);
     return {id: momentRef.id, ...moment, ...change};
@@ -138,12 +149,17 @@ test('concurrent joins enforce two members; leave revokes access and invitation'
   const saved = (await db.doc(`shared_gardens/${garden.id}`).get()).data();
   assert.equal(saved.members.length, 2);
   const joined = saved.members.find(uid => uid !== 'alice');
+  await seedEntry('alice', 'e-leave');
+  const flower = await call('alice', {action: 'plant', gardenId: garden.id, entryId: 'e-leave'});
+  await assertSucceeds(getDocFromServer(doc(client(joined), `shared_gardens/${garden.id}/moments/${flower.id}`)));
   await call(joined, {action: 'leave', gardenId: garden.id});
   const updated = (await db.doc(`shared_gardens/${garden.id}`).get()).data();
   assert.deepEqual(updated.members, ['alice']);
   assert.notEqual(updated.code, garden.code);
-  const client = env.authenticatedContext(joined).firestore();
-  await assertFails(getDoc(doc(client, `shared_gardens/${garden.id}`)));
+  const departed = env.authenticatedContext(joined).firestore();
+  await assertFails(getDocFromServer(doc(departed, `shared_gardens/${garden.id}`)));
+  await assertFails(getDocFromServer(doc(departed, `shared_gardens/${garden.id}/moments/${flower.id}`)));
+  await assert.rejects(call(joined, {action: 'care', gardenId: garden.id, momentId: flower.id, isWater: true}), {code: 'permission-denied'});
   await assert.rejects(join(joined, garden.code), {code: 'not-found'});
   assert.equal((await create(joined)).members[0], joined);
 });
@@ -151,12 +167,13 @@ test('concurrent joins enforce two members; leave revokes access and invitation'
 test('21+ flowers, concurrent writes and retries allocate unique beds and slots', async () => {
   const garden = await create('alice');
   await join('bob', garden.code);
-  console.log('plant test garden', garden.id);
   const flowers = [];
   for (let i = 0; i < 22; i += 2) {
     await Promise.all([seedEntry('alice', `e${i}`), seedEntry('bob', `e${i + 1}`)]);
-    flowers.push(await call('alice', {action: 'plant', gardenId: garden.id, entryId: `e${i}`}));
-    flowers.push(await call('bob', {action: 'plant', gardenId: garden.id, entryId: `e${i + 1}`}));
+    flowers.push(...await Promise.all([
+      call('alice', {action: 'plant', gardenId: garden.id, entryId: `e${i}`}),
+      call('bob', {action: 'plant', gardenId: garden.id, entryId: `e${i + 1}`}),
+    ]));
   }
   assert.equal(new Set(flowers.map(m => `${m.bedIndex}-${m.slotIndex}`)).size, 22);
   assert.equal(flowers.filter(m => m.bedIndex === 1).length, 2);
@@ -172,11 +189,25 @@ test('care is atomic and cannot be replayed or forged', async () => {
   await seedEntry('alice', 'e1');
   const flower = await call('alice', {action: 'plant', gardenId: garden.id, entryId: 'e1'});
   const data = {action: 'care', gardenId: garden.id, momentId: flower.id, isWater: true};
-  console.log('care test moment', flower.id);
   await Promise.all([call('bob', data), call('bob', data)]);
   const saved = (await db.doc(`shared_gardens/${garden.id}/moments/${flower.id}`).get()).data();
   assert.equal(saved.waterCount, 1);
   assert.equal(saved.caption, 'Riêng tư');
+  const store = client('bob');
+  const ref = doc(store, `shared_gardens/${garden.id}/moments/${flower.id}`);
+  const receipt = doc(store, `${ref.path}/care/bob`);
+  await assertFails(updateDoc(ref, {waterCount: 999}));
+  await assertFails(updateDoc(receipt, {water: false}));
+  await assertFails(updateDoc(receipt, {sun: true}));
+  await assertFails(setDoc(doc(store, `${ref.path}/care/alice`), {water: true, sun: true}));
+  await call('bob', data);
+  assert.equal((await db.doc(ref.path).get()).data().waterCount, 1);
+  assert.equal((await db.doc(ref.path).get()).data().lastInteraction, 'bob vừa tưới nước 💧');
+  // Care can't carry free text onto the partner's flower.
+  await assert.rejects(call('bob', {...data, isWater: false, text: 'tin nhắn tuỳ ý'}), {code: 'permission-denied'});
+  await call('bob', {...data, isWater: false});
+  assert.equal((await db.doc(ref.path).get()).data().lastInteraction, 'bob vừa gửi tia nắng ấm ☀️');
+
 });
 
 test('legacy invitations require rotation; legacy slots remain occupied', async () => {
@@ -189,4 +220,23 @@ test('legacy invitations require rotation; legacy slots remain occupied', async 
   const flower = await call('alice', {action: 'plant', gardenId: 'legacy', entryId: 'e1'});
   assert.equal(flower.bedIndex, 1);
   assert.equal(flower.slotIndex, 0);
+});
+
+test('only the author can take back a flower, and only while a member', async () => {
+  const garden = await create('alice');
+  await join('bob', garden.code);
+  await seedEntry('alice', 'e-mine');
+  await seedEntry('alice', 'e-later');
+  const flower = await call('alice', {action: 'plant', gardenId: garden.id, entryId: 'e-mine'});
+  const later = await call('alice', {action: 'plant', gardenId: garden.id, entryId: 'e-later'});
+  const momentPath = id => `shared_gardens/${garden.id}/moments/${id}`;
+  await assertFails(deleteDoc(doc(client('bob'), momentPath(flower.id))));
+  await assertFails(deleteDoc(doc(client('eve'), momentPath(flower.id))));
+  await assertSucceeds(deleteDoc(doc(client('alice'), momentPath(flower.id))));
+  assert.equal((await db.doc(momentPath(flower.id)).get()).exists, false);
+  // The same entry can be shared again later; it takes a new slot.
+  const again = await call('alice', {action: 'plant', gardenId: garden.id, entryId: 'e-mine'});
+  assert.equal(again.id, flower.id);
+  await call('alice', {action: 'leave', gardenId: garden.id});
+  await assertFails(deleteDoc(doc(client('alice'), momentPath(later.id))));
 });

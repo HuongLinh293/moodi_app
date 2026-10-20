@@ -99,8 +99,8 @@ class AIReflection {
       case 'stressed':
         return AIReflection(
           possibleEmotions: ['Căng thẳng', 'Áp lực', 'Quá tải'],
-          possibleTrigger: situation?.isNotEmpty == true ? 'Khối lượng việc hoặc áp lực kỳ vọng' : 'Áp lực dồn dập',
-          intensifyingThought: thought?.isNotEmpty == true ? thought! : 'Tôi phải hoàn thành mọi thứ một cách hoàn hảo ngay lúc này.',
+          possibleTrigger: situation?.isNotEmpty == true ? 'Khối lượng việc hoặc áp lực kỳ vọng' : '',
+          intensifyingThought: thought?.trim() ?? '',
           reflectionQuestion: 'Điều tồi tệ nhất thực sự có thể xảy ra là gì, và bạn có thể giải quyết từng phần nhỏ ra sao?',
           balancedThought: 'Tôi không cần làm xong tất cả ngay hôm nay. Từng bước nhỏ và nghỉ ngơi hợp lý là cách tốt nhất.',
           recommendedExercise: 'grounding',
@@ -111,8 +111,8 @@ class AIReflection {
       case 'anxious':
         return AIReflection(
           possibleEmotions: ['Lo lắng', 'Bồn chồn', 'Bất an'],
-          possibleTrigger: situation?.isNotEmpty == true ? 'Sự bất định trong tương lai' : 'Tình huống chưa rõ kết quả',
-          intensifyingThought: thought?.isNotEmpty == true ? thought! : 'Chắc chắn điều tồi tệ sẽ xảy ra và tôi sẽ không chịu nổi.',
+          possibleTrigger: situation?.isNotEmpty == true ? 'Sự bất định trong tương lai' : '',
+          intensifyingThought: thought?.trim() ?? '',
           reflectionQuestion: 'Bạn đang lo lắng về điều có thật hay chỉ là một viễn cảnh do tâm trí tưởng tượng?',
           balancedThought: 'Lo lắng là một cảm xúc tự nhiên, nhưng lo lắng không phải là sự thật. Tôi có năng lực thích ứng với những gì xảy ra.',
           recommendedExercise: 'thought_reframing',
@@ -123,8 +123,8 @@ class AIReflection {
       case 'angry':
         return AIReflection(
           possibleEmotions: ['Tức giận', 'Bực bội', 'Bất công'],
-          possibleTrigger: situation?.isNotEmpty == true ? 'Ranh giới cá nhân bị xâm phạm' : 'Kỳ vọng không được đáp ứng',
-          intensifyingThought: thought?.isNotEmpty == true ? thought! : 'Họ cố tình chống lại tôi / Điều này hoàn toàn không thể chấp nhận được!',
+          possibleTrigger: situation?.isNotEmpty == true ? 'Ranh giới cá nhân bị xâm phạm' : '',
+          intensifyingThought: thought?.trim() ?? '',
           reflectionQuestion: 'Cơn giận này đang cố gắng bảo vệ giá trị hoặc nhu cầu sâu xa nào của bạn?',
           balancedThought: 'Tôi có quyền cảm thấy tức giận, nhưng tôi có toàn quyền lựa chọn hành động để không làm tổn thương chính mình.',
           recommendedExercise: 'response_pause',
@@ -135,8 +135,8 @@ class AIReflection {
       case 'sad':
         return AIReflection(
           possibleEmotions: ['Buồn bã', 'Hụt hẫng', 'Mệt mỏi'],
-          possibleTrigger: situation?.isNotEmpty == true ? 'Sự mất mát hoặc cảm giác bị từ chối' : 'Kỳ vọng không thành',
-          intensifyingThought: thought?.isNotEmpty == true ? thought! : 'Tôi chẳng làm được điều gì nên hồn cả.',
+          possibleTrigger: situation?.isNotEmpty == true ? 'Sự mất mát hoặc cảm giác bị từ chối' : '',
+          intensifyingThought: thought?.trim() ?? '',
           reflectionQuestion: 'Nếu một người bạn thân cũng đang ở vị trí này, bạn sẽ nói lời gì với họ?',
           balancedThought: 'Nỗi buồn là bằng chứng tôi quan tâm sâu sắc. Cảm giác này sẽ qua đi, và tôi xứng đáng được đối xử dịu dàng.',
           recommendedExercise: 'self_compassion',
@@ -149,8 +149,8 @@ class AIReflection {
       case 'grateful':
         return AIReflection(
           possibleEmotions: ['Thanh thản', 'Bình an', 'Biết ơn'],
-          possibleTrigger: situation?.isNotEmpty == true ? 'Khoảnh khắc kết nối và hiện diện' : 'Một ngày thuận lợi',
-          intensifyingThought: 'Tôi đang trân trọng khoảnh khắc hiện tại.',
+          possibleTrigger: situation?.isNotEmpty == true ? 'Khoảnh khắc kết nối và hiện diện' : '',
+          intensifyingThought: '',
           reflectionQuestion: 'Yếu tố nào trong ngày hôm nay đã giúp bạn cảm nhận được sự bình yên này?',
           balancedThought: 'Tôi ghi nhận và lưu giữ cảm xúc ấm áp này để nuôi dưỡng tâm trí khi gặp khó khăn.',
           recommendedExercise: 'self_compassion',
@@ -161,8 +161,8 @@ class AIReflection {
       default:
         return AIReflection(
           possibleEmotions: ['Phức tạp', 'Lẫn lộn'],
-          possibleTrigger: 'Nhiều yếu tố đan xen',
-          intensifyingThought: thought?.isNotEmpty == true ? thought! : 'Tôi cảm thấy khó giải thích cảm giác này.',
+          possibleTrigger: situation?.isNotEmpty == true ? 'Nhiều yếu tố đan xen' : '',
+          intensifyingThought: thought?.trim() ?? '',
           reflectionQuestion: 'Cảm xúc này đang muốn truyền tải thông điệp gì đến bạn?',
           balancedThought: 'Không nhất thiết phải gọi tên chính xác mọi thứ ngay lập tức. Cứ để cảm xúc hiện diện tự nhiên.',
           recommendedExercise: 'grounding',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mindra/models/garden_moment.dart';
 import 'package:mindra/models/journal_entry.dart';
@@ -20,6 +22,11 @@ class RecordingGarden extends GardenRepository {
     if (fail) throw StateError('offline');
     deleted.add('$userId/$momentId');
   }
+  @override
+  Future<void> deleteAllMoments({required String userId}) async {
+    if (fail) throw StateError('offline');
+    deleted.add('$userId/*');
+  }
 }
 class RecordingJournal extends JournalRepository {
   bool fail = false;
@@ -28,6 +35,19 @@ class RecordingJournal extends JournalRepository {
   Future<void> deleteEntry(String entryId, {String? userId}) async {
     if (fail) throw StateError('offline');
     deleted.add('$userId/$entryId');
+  }
+  @override
+  Future<void> deleteAllEntries({required String userId}) async {
+    if (fail) throw StateError('offline');
+    deleted.add('$userId/*');
+  }
+}
+class OrderedJournal extends RecordingJournal {
+  final saveGate = Completer<void>();
+  @override
+  Future<void> saveEntry(JournalEntry entry, {String? userId}) async {
+    await saveGate.future;
+    deleted.add('save/${entry.id}');
   }
 }
 void main() {
@@ -59,5 +79,34 @@ void main() {
     expect(journal.deleted, ['user_1/entry']);
     expect(state.entryById('entry'), isNull);
     expect(state.isPlanted('entry'), isFalse);
+  });
+  test('Delete all removes account data and keeps local data on failure', () async {
+    final garden = RecordingGarden();
+    final journal = RecordingJournal();
+    final state = MindraState(initialEntries: [JournalEntry(id: 'entry', timestamp: DateTime.now(), emotionKey: 'calm', intensity: 3)],
+      authRepository: GardenTestAuth(), gardenRepository: garden, journalRepository: journal);
+    addTearDown(state.dispose);
+    journal.fail = true;
+    await expectLater(state.deleteAllUserData(), throwsStateError);
+    expect(state.entries, hasLength(1));
+    journal.fail = false;
+    await state.deleteAllUserData();
+    expect(journal.deleted, ['user_1/*']);
+    expect(garden.deleted, ['user_1/*']);
+    expect(state.entries, isEmpty);
+    expect(state.gardenMoments, isEmpty);
+  });
+  test('Delete all waits for in-flight saves so entries are not recreated', () async {
+    final journal = OrderedJournal();
+    final state = MindraState(initialEntries: [JournalEntry(id: 'old', timestamp: DateTime.now(), emotionKey: 'calm', intensity: 3)],
+      authRepository: GardenTestAuth(), gardenRepository: RecordingGarden(), journalRepository: journal);
+    addTearDown(state.dispose);
+    state.addEntry(JournalEntry(id: 'new', timestamp: DateTime.now(), emotionKey: 'sad', intensity: 2));
+    final deleting = state.deleteAllUserData();
+    await Future<void>.delayed(Duration.zero);
+    expect(journal.deleted, isEmpty);
+    journal.saveGate.complete();
+    await deleting;
+    expect(journal.deleted, ['save/new', 'user_1/*']);
   });
 }

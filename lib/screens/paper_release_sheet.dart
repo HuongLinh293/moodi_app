@@ -79,13 +79,13 @@ class _PaperReleaseSheetState extends State<PaperReleaseSheet> {
         HapticFeedback.selectionClick();
       }
     }
-    setState(() => _crumple = (_crumple + .16).clamp(0, 1));
+    setState(() => _crumple = (_crumple + .25).clamp(0, 1));
   }
 
   void _startHold() {
     _hold?.cancel();
     _press();
-    _hold = Timer.periodic(const Duration(milliseconds: 240), (_) => _press());
+    _hold = Timer.periodic(const Duration(milliseconds: 320), (_) => _press());
   }
 
   void _stopHold() {

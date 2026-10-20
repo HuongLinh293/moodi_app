@@ -22,12 +22,17 @@ class SharedGardenBedView extends StatelessWidget {
   final MindraState state;
   final List<SharedMoment> moments;
   final ValueChanged<SharedMoment> onOpenMoment;
+  final String emptyTitle;
+  final String emptyMessage;
 
   const SharedGardenBedView({
     super.key,
     required this.state,
     required this.moments,
     required this.onOpenMoment,
+    this.emptyTitle = 'Mảnh đất đang chờ đón',
+    this.emptyMessage =
+        'Hãy gieo một cảm xúc để bạn đồng hành cùng ngắm nhìn và tưới nước.',
   });
 
   @override
@@ -123,14 +128,14 @@ class SharedGardenBedView extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Mảnh đất đang chờ đón',
+                          emptyTitle,
                           style: AppTypography.titleMedium.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Hãy gieo một cảm xúc để bạn đồng hành cùng ngắm nhìn và tưới nước.',
+                          emptyMessage,
                           textAlign: TextAlign.center,
                           style: AppTypography.bodySmall,
                         ),
@@ -597,6 +602,50 @@ void showSharedMomentSheet({
                     ),
                   ],
                 ),
+                if (liveMoment.authorId == state.currentUserId) ...[
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton.icon(
+                      key: const ValueKey('shared-remove-moment'),
+                      icon: const Icon(Icons.undo_rounded, size: 18),
+                      label: const Text('Gỡ bông hoa này'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        minimumSize: const Size(44, 44),
+                      ),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: ctx,
+                          builder: (dialogCtx) => AlertDialog(
+                            title: const Text('Gỡ bông hoa này?'),
+                            content: const Text(
+                              'Bạn đồng hành sẽ không còn thấy khoảnh khắc này. Ghi chép trong nhật ký của bạn vẫn được giữ nguyên.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogCtx),
+                                child: const Text('Hủy'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.pop(dialogCtx, true),
+                                child: const Text('Gỡ'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true || !context.mounted) return;
+                        final success = await runGardenAction(
+                          context,
+                          () => state.removeSharedMoment(liveMoment.id),
+                        );
+                        if (success && sheetContext.mounted) {
+                          Navigator.pop(sheetContext);
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -654,7 +703,7 @@ void showSharedGardenPostcardDialog({
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
-                    '📮 MINDRA',
+                    '📮 MOODI',
                     style: TextStyle(
                       color: AppColors.orange,
                       fontWeight: FontWeight.bold,
@@ -843,6 +892,8 @@ void showJoinGardenDialog({
   required MindraState state,
 }) {
   final controller = TextEditingController();
+  final nameController =
+      TextEditingController(text: state.sharedDisplayNameSuggestion);
   bool isLoading = false;
   String? errorText;
 
@@ -881,7 +932,7 @@ void showJoinGardenDialog({
                 Text('Tham gia vườn sẻ chia', style: AppTypography.titleMedium),
                 const SizedBox(height: 6),
                 Text(
-                  'Nhập mã kết nối gồm 7 ký tự (ví dụ: MD-8X2K) do bạn đồng hành gửi cho bạn.',
+                  'Dán mã mời bắt đầu bằng "MD-" mà bạn đồng hành gửi cho bạn.',
                   style: AppTypography.bodySmall,
                 ),
                 const SizedBox(height: 16),
@@ -897,7 +948,21 @@ void showJoinGardenDialog({
                     prefixIcon: const Icon(Icons.vpn_key_rounded),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('shared-display-name'),
+                  controller: nameController,
+                  maxLength: 40,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Tên bạn đồng hành sẽ thấy',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.person_outline_rounded),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -906,9 +971,12 @@ void showJoinGardenDialog({
                         ? null
                         : () async {
                             final code = controller.text.trim();
-                            if (code.isEmpty) {
+                            final name = nameController.text.trim();
+                            if (code.isEmpty || name.isEmpty) {
                               setDialogState(
-                                () => errorText = 'Vui lòng nhập mã',
+                                () => errorText = code.isEmpty
+                                    ? 'Vui lòng nhập mã'
+                                    : 'Hãy nhập tên để bạn đồng hành nhận ra bạn',
                               );
                               return;
                             }
@@ -918,7 +986,10 @@ void showJoinGardenDialog({
                             });
                             bool success;
                             try {
-                              success = await state.joinSharedGarden(code);
+                              success = await state.joinSharedGarden(
+                                code,
+                                displayName: name,
+                              );
                             } catch (error) {
                               if (sheetContext.mounted) {
                                 setDialogState(() {

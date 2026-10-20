@@ -1,6 +1,7 @@
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const logger = require("firebase-functions/logger");
+const { authorizeReflection } = require("./security");
 const { GoogleGenAI } = require("@google/genai");
 
 setGlobalOptions({
@@ -91,20 +92,13 @@ const CBT_TEMPLATES = {
  * Callable endpoint invoked from Mindra Flutter app
  */
 exports.generateReflection = onCall(async (request) => {
-  const { emotionKey, intensity = 3, situation = "", thought = "" } = request.data || {};
-
-  logger.info("Generating reflection for:", {
-    uid: request.auth ? request.auth.uid : "anonymous",
-    emotionKey,
-    intensity,
-  });
+  const { emotionKey, intensity, situation, thought } = authorizeReflection(request);
 
   // Safety trigger check
   const fullText = `${situation} ${thought}`.toLowerCase();
   const isCrisis = CRISIS_KEYWORDS.some((kw) => fullText.includes(kw));
 
   if (isCrisis) {
-    logger.warn("Crisis signal detected in reflection request");
     return {
       possibleEmotions: ["Nguy cấp", "Cần hỗ trợ"],
       possibleTrigger: "Khủng hoảng tâm lý",
@@ -121,7 +115,9 @@ exports.generateReflection = onCall(async (request) => {
   }
 
   // Attempt Gemini API call if key is available
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+  const apiKey = process.env.FUNCTIONS_EMULATOR === 'true'
+    ? null // Emulator demos must never send text to an external provider.
+    : process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
 
   if (apiKey) {
     try {
@@ -178,8 +174,8 @@ Yêu cầu trả về đúng định dạng JSON thuần túy (không bọc tron
           recommendationsDismissed: false,
         };
       }
-    } catch (err) {
-      logger.error("Error calling Gemini API in generateReflection, falling back to CBT templates:", err);
+    } catch (_) {
+      logger.warn("reflection.provider_unavailable");
     }
   }
 
@@ -198,4 +194,14 @@ Yêu cầu trả về đúng định dạng JSON thuần túy (không bọc tron
     safetyReason: null,
     recommendationsDismissed: false,
   };
+});
+
+// Community gateway: direct Firestore/Storage client access stays denied.
+exports.community = onCall({memory: '512MiB', timeoutSeconds: 60}, async request => {
+  const {getApps, initializeApp} = require('firebase-admin/app');
+  if (!getApps().length) initializeApp();
+  const {getFirestore} = require('firebase-admin/firestore');
+  const {getStorage} = require('firebase-admin/storage');
+  const {createCommunityService} = require('./community');
+  return createCommunityService(getFirestore(), getStorage().bucket()).handle(request);
 });

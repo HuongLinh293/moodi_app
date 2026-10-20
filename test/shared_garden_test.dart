@@ -7,9 +7,23 @@ import 'package:mindra/models/shared_garden.dart';
 import 'helpers/fake_shared_garden_repository.dart';
 import 'package:mindra/widgets/shared_garden_widgets.dart';
 
+import 'package:mindra/repositories/garden_repository.dart';
+import 'package:mindra/repositories/journal_repository.dart';
 import 'package:mindra/repositories/shared_garden_repository.dart';
 import 'package:mindra/screens/garden_view.dart';
 import 'package:mindra/state/mindra_state.dart';
+
+class _NoopJournal extends JournalRepository {
+  @override
+  Future<void> deleteEntry(String entryId, {String? userId}) async {}
+  @override
+  Future<void> deleteAllEntries({required String userId}) async {}
+}
+
+class _NoopGarden extends GardenRepository {
+  @override
+  Future<void> deleteAllMoments({required String userId}) async {}
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +88,76 @@ void main() {
     expect(state.sharedMoments, isEmpty);
   });
 
+  test('Demo garden is local only: writes are refused and it can be left', () async {
+    final repo = FakeSharedGardenRepository();
+    final state = MindraState(
+      initialEntries: [
+        JournalEntry(id: 'a', timestamp: DateTime.now(), emotionKey: 'calm', intensity: 3),
+      ],
+      authRepository: GardenTestAuth(),
+      sharedGardenRepository: repo,
+    );
+    addTearDown(state.dispose);
+    state.loadDemoSharedGarden();
+    expect(state.isDemoSharedGarden, isTrue);
+    expect(state.sharedGarden!.members, hasLength(2));
+    await expectLater(
+      state.plantInSharedGarden('a'),
+      throwsA(isA<StateError>().having((e) => e.message, 'message', contains('vườn mẫu'))),
+    );
+    await expectLater(
+      state.sendCareReaction(momentId: state.sharedMoments.first.id, isWater: true),
+      throwsStateError,
+    );
+    expect(repo.items, isEmpty);
+    await state.leaveSharedGarden();
+    expect(state.isDemoSharedGarden, isFalse);
+    expect(repo.leaves, 0);
+  });
+
+  test('Authors can take back shared flowers when removing, deleting or leaving', () async {
+    final repo = FakeSharedGardenRepository();
+    JournalEntry entry(String id) => JournalEntry(
+      id: id,
+      timestamp: DateTime.now(),
+      emotionKey: 'calm',
+      intensity: 3,
+    );
+    final state = MindraState(
+      initialEntries: [entry('a'), entry('b'), entry('c')],
+      authRepository: GardenTestAuth(),
+      sharedGardenRepository: repo,
+      journalRepository: _NoopJournal(),
+      gardenRepository: _NoopGarden(),
+    );
+    addTearDown(state.dispose);
+    state.retrySharedGarden();
+    await repo.createGarden(userId: 'user_1', userName: 'Linh');
+    await state.plantInSharedGarden('a');
+    await state.plantInSharedGarden('b');
+    expect(state.isSharedPlanted('a'), isTrue);
+    expect(state.isSharedPlanted('c'), isFalse);
+
+    // Text stays private unless the user opted in on the preview.
+    expect(state.sharedMoments.first.caption, isEmpty);
+
+    await state.removeSharedMoment('user_1_a');
+    expect(state.isSharedPlanted('a'), isFalse);
+
+    // Deleting the journal entry takes its shared copy with it.
+    await state.removeEntry('b');
+    expect(repo.removed, ['user_1_a', 'user_1_b']);
+    expect(state.isSharedPlanted('b'), isFalse);
+
+    await state.plantInSharedGarden('c');
+    await state.deleteAllUserData();
+    expect(repo.removed.last, '${state.sharedGarden!.id}/*');
+
+    await state.leaveSharedGarden(removeMyFlowers: true);
+    expect(repo.removed.where((r) => r.endsWith('/*')), hasLength(2));
+    expect(repo.leaves, 1);
+  });
+
   testWidgets('More than twenty shared flowers use separate beds and remain tappable', (tester) async {
     tester.view.physicalSize = const Size(320, 800);
     tester.view.devicePixelRatio = 1;
@@ -97,7 +181,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('GardenView toggles to Shared Garden and renders UI', (
+  testWidgets('GardenView renders personal garden directly without shared garden toggle', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(375, 812);
@@ -127,79 +211,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify personal garden is default
-    expect(find.text('Vườn của tôi'), findsOneWidget);
-    expect(find.text('Vườn sẻ chia'), findsOneWidget);
-
-    // Switch to Shared Garden
-    await tester.tap(find.text('Vườn sẻ chia'));
-    await tester.pumpAndSettle();
-
-    expect(state.isSharedGardenMode, isTrue);
-    expect(find.text('Tạo khu vườn mới'), findsOneWidget);
-    expect(find.text('Nhập mã kết nối'), findsOneWidget);
-
-    // Tap Tạo khu vườn mới
-    await tester.tap(find.text('Tạo khu vườn mới'));
-    await tester.pumpAndSettle();
-
-    expect(state.sharedGarden, isNotNull);
-    expect(find.text('Khu vườn đã sẵn sàng! 🌱'), findsOneWidget);
-
-    // Dismiss dialog
-    await tester.tap(find.text('Vào vườn ngay'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Gieo cảm xúc vào vườn chung'), findsOneWidget);
-    expect(find.text('Bưu thiếp kỷ niệm'), findsOneWidget);
-
-    // Open Postcard dialog
-    await tester.ensureVisible(find.text('Bưu thiếp kỷ niệm'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Bưu thiếp kỷ niệm'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('BƯU THIẾP TÂM TRÍ'), findsOneWidget);
-    expect(find.text('Đóng'), findsOneWidget);
-
-    await tester.tap(find.text('Đóng'));
-    await tester.pumpAndSettle();
-
-    // Plant entry into shared garden
-    await tester.ensureVisible(find.text('Gieo cảm xúc vào vườn chung'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Gieo cảm xúc vào vườn chung'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Gieo vào vườn sẻ chia'), findsOneWidget);
-    await tester.tap(find.text('Giữ lại'));
-    await tester.pumpAndSettle();
-
-    // Verify flower is rendered in the garden bed
-    expect(state.sharedMoments.length, 1);
-    expect(
-      find.byKey(ValueKey('shared-flower-${state.sharedMoments.first.id}')),
-      findsOneWidget,
-    );
-    expect(
-      find.text('1 khoảnh khắc được cùng nhau gieo trồng'),
-      findsOneWidget,
-    );
-
-    // Wait for SnackBar to dismiss
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
-
-    // Open postcard and verify stats updated
-    await tester.ensureVisible(find.text('Bưu thiếp kỷ niệm'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Bưu thiếp kỷ niệm'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Bưu thiếp kỷ niệm'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('1 🌸'), findsOneWidget);
-    await tester.tap(find.text('Đóng'));
-    await tester.pumpAndSettle();
+    // Verify personal garden is default and there is no shared garden toggle
+    expect(find.text('Vườn của tôi'), findsNothing);
+    expect(find.text('Vườn sẻ chia'), findsNothing);
+    expect(find.textContaining('Tháng'), findsOneWidget);
+    expect(find.textContaining('Những điều bạn muốn giữ lại'), findsOneWidget);
   });
 }
