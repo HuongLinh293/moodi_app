@@ -398,7 +398,9 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
   Widget _buildPromptStep({required bool writable}) {
     final prompt = _config.prompts[_stepIndex];
     final isLast = _stepIndex == _totalSteps - 1;
-    return Padding(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,6 +471,7 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
           ),
         ],
       ),
+    ),
     );
   }
 

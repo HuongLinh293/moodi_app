@@ -260,6 +260,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final state = createTestState();
+    state.selectEmotion('calm');
     final initialCount = state.entries.length;
 
     await tester.pumpWidget(
@@ -597,31 +598,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('LoginView renders Google and Apple sign in buttons', (
-    WidgetTester tester,
-  ) async {
-    final state = MindraState()..clearAllData();
-    await tester.pumpWidget(
-      ChangeNotifierProvider<MindraState>.value(
-        value: state,
-        child: const MaterialApp(home: LoginView()),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('btn-google-sign-in')), findsOneWidget);
-    expect(find.byKey(const ValueKey('btn-apple-sign-in')), findsOneWidget);
-    expect(find.text('Tiếp tục với Google'), findsOneWidget);
-    expect(find.text('Tiếp tục với Apple'), findsOneWidget);
-
-    // Switch to register mode
-    await tester.tap(find.byKey(const ValueKey('toggle-auth-mode')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Đăng ký bằng Google'), findsOneWidget);
-    expect(find.text('Đăng ký bằng Apple'), findsOneWidget);
-    expect(find.text('Tạo tài khoản'), findsWidgets);
-  });
+  testWidgets(
+    'API login shows email form and registration without unsupported providers',
+    (tester) async {
+      final state = MindraState();
+      addTearDown(state.dispose);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<MindraState>.value(
+          value: state,
+          child: const MaterialApp(home: LoginView()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Email'), findsOneWidget);
+      expect(find.text('Mật khẩu'), findsOneWidget);
+      expect(find.byKey(const ValueKey('btn-google-sign-in')), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('toggle-auth-mode')),
+      );
+      await tester.tap(find.byKey(const ValueKey('toggle-auth-mode')));
+      await tester.pumpAndSettle();
+      // Tiêu đề và nút gửi đều là "Tạo tài khoản".
+      expect(find.text('Tạo tài khoản'), findsNWidgets(2));
+      expect(find.text('Xác nhận mật khẩu'), findsOneWidget);
+    },
+  );
 
   test('Reflection template never invents a thought or trigger', () {
     final empty = AIReflection.forEmotion(emotionKey: 'sad', intensity: 4);

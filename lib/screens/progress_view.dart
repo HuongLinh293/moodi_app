@@ -1095,7 +1095,9 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Padding(
           padding: EdgeInsets.fromLTRB(
             22,
             16,
@@ -1238,6 +1240,7 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

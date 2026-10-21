@@ -266,7 +266,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Minh'), findsOneWidget);
   });
-  test('repository rejects stale session before reaching Firebase', () async {
+  test('repository rejects stale session before reaching the API', () async {
     final repo = CommunityRepository(uid: 'alice', sessionValid: () => false);
     await expectLater(
       repo.call('messages', {'target': 'bob'}),

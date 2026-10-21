@@ -810,7 +810,9 @@ class TodayView extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        content: TextFormField(
+        content: GestureDetector(
+          onTap: () => FocusScope.of(dialogContext).unfocus(),
+          child: TextFormField(
           initialValue: noteValue,
           autofocus: true,
           maxLines: 3,
@@ -818,6 +820,7 @@ class TodayView extends StatelessWidget {
           decoration: const InputDecoration(
             hintText: 'Điều gì đã xảy ra? (không bắt buộc)',
           ),
+        ),
         ),
         actions: [
           TextButton(

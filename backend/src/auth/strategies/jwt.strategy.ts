@@ -4,6 +4,7 @@ import { Strategy, ExtractJwt } from 'passport-jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { jwtAccessSecret } from '../../config/jwt.config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -14,7 +15,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET,
+      secretOrKey: jwtAccessSecret(),
     });
   }
 
@@ -22,6 +23,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const user = await this.usersRepository.findOne({
       where: { id: payload.sub },
     });
+    // Token phát hành trước lần đăng xuất gần nhất bị từ chối.
+    if (!user || payload.ver !== user.tokenVersion) return null;
     return user;
   }
 }

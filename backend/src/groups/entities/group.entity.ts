@@ -5,9 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  ManyToMany,
   JoinColumn,
-  JoinTable,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
@@ -31,9 +29,6 @@ export class Group {
 
   @Column({ nullable: true })
   createdById: string;
-
-  @ManyToMany(() => User, (user) => user.groups)
-  members: User[];
 
   @CreateDateColumn()
   createdAt: Date;

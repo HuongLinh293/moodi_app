@@ -157,7 +157,6 @@ class _HomeShellState extends State<HomeShell> {
           ),
         );
 
-
       case 1:
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -170,11 +169,7 @@ class _HomeShellState extends State<HomeShell> {
                 color: AppColors.mint.withValues(alpha: 0.2),
               ),
               child: const Center(
-                child: Icon(
-                  Icons.spa_outlined,
-                  size: 18,
-                  color: AppColors.ink,
-                ),
+                child: Icon(Icons.spa_outlined, size: 18, color: AppColors.ink),
               ),
             ),
             const SizedBox(width: 10),
@@ -265,7 +260,7 @@ class _HomeShellState extends State<HomeShell> {
         // Streak indicator (ở tab Hôm nay)
         if (currentTab == 0)
           Semantics(
-            label: 'Chuỗi hiện diện: ${state.consecutiveWeeks} tuần',
+            label: 'Chuỗi hiện diện: ${state.consecutiveDays} ngày',
             child: Padding(
               padding: EdgeInsets.only(right: isCompact ? 6 : 10),
               child: _cornerChip(
@@ -276,8 +271,8 @@ class _HomeShellState extends State<HomeShell> {
                     const SizedBox(width: 4),
                     Text(
                       isCompact
-                          ? '${state.consecutiveWeeks}'
-                          : '${state.consecutiveWeeks} tuần',
+                          ? '${state.consecutiveDays}'
+                          : '${state.consecutiveDays} ngày',
                       style: AppTypography.caption.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink,
@@ -350,7 +345,9 @@ class _HomeShellState extends State<HomeShell> {
           ),
           child: SafeArea(
             top: false,
-            child: Column(
+            child: ListenableBuilder(
+              listenable: state,
+              builder: (_, _) => Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -383,25 +380,31 @@ class _HomeShellState extends State<HomeShell> {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          state.userName,
-                          style: AppTypography.titleLarge.copyWith(
-                            fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            state.userName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.titleLarge.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          state.userEmail.isEmpty
-                              ? 'Tài khoản khách'
-                              : state.userEmail,
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textMuted,
+                          const SizedBox(height: 2),
+                          Text(
+                            state.userEmail.isEmpty
+                                ? 'Tài khoản khách'
+                                : state.userEmail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -432,13 +435,13 @@ class _HomeShellState extends State<HomeShell> {
                       Column(
                         children: [
                           Text(
-                            '${state.consecutiveWeeks} tuần',
+                            '${state.consecutiveDays}',
                             style: AppTypography.titleLarge.copyWith(
                               fontWeight: FontWeight.w800,
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text('Kiên trì', style: AppTypography.caption),
+                          Text('Ngày liên tiếp', style: AppTypography.caption),
                         ],
                       ),
                       Container(height: 28, width: 1, color: AppColors.line),
@@ -458,11 +461,33 @@ class _HomeShellState extends State<HomeShell> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 10),
+                Text(
+                  'Tuần này ${state.checkinDaysThisWeek}/7 ngày · ${state.exercisesCompleted} bài tập',
+                  style: AppTypography.caption,
+                ),
                 const SizedBox(height: 18),
                 Material(
                   color: Colors.transparent,
                   child: Column(
                     children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(
+                          Icons.edit_outlined,
+                          color: AppColors.ink,
+                        ),
+                        title: Text(
+                          'Sửa tên hiển thị',
+                          style: AppTypography.bodyMedium,
+                        ),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                        ),
+                        onTap: () => _editDisplayName(context, state),
+                      ),
+                      const Divider(height: 1),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(
@@ -565,10 +590,31 @@ class _HomeShellState extends State<HomeShell> {
                 const SizedBox(height: 12),
               ],
             ),
+            ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _editDisplayName(BuildContext context, MindraState state) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _DisplayNameDialog(initial: state.userName),
+    );
+    if (name == null || name.isEmpty || !context.mounted) return;
+    try {
+      await state.updateDisplayName(name);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e is StateError ? e.message : 'Chưa lưu được tên. Hãy thử lại.',
+          ),
+        ),
+      );
+    }
   }
 
   void _showLogoutDialog(BuildContext context, MindraState state) {
@@ -1042,6 +1088,50 @@ class _HomeShellState extends State<HomeShell> {
         padding: padding,
         child: Center(widthFactor: 1.0, child: child),
       ),
+    );
+  }
+}
+
+class _DisplayNameDialog extends StatefulWidget {
+  const _DisplayNameDialog({required this.initial});
+  final String initial;
+
+  @override
+  State<_DisplayNameDialog> createState() => _DisplayNameDialogState();
+}
+
+class _DisplayNameDialogState extends State<_DisplayNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.pop(context, _controller.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Tên hiển thị'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 100,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(hintText: 'Tên mọi người thấy'),
+        onSubmitted: (_) => _save(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Hủy'),
+        ),
+        ElevatedButton(onPressed: _save, child: const Text('Lưu')),
+      ],
     );
   }
 }

@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { FriendsService } from './friends.service';
@@ -19,23 +20,22 @@ import { User } from '../users/entities/user.entity';
 
 @ApiTags('friends')
 @ApiBearerAuth()
+@UseGuards(JwtGuard)
 @Controller('friends')
 export class FriendsController {
   constructor(private friendsService: FriendsService) {}
 
   @Get()
-  @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Danh sách bạn bè' })
   async getFriends(
     @CurrentUser() user: User,
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.friendsService.getFriends(user.id, page, limit);
   }
 
   @Post('requests')
-  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Gửi lời mời kết bạn' })
   async sendFriendRequest(
@@ -46,54 +46,49 @@ export class FriendsController {
   }
 
   @Get('requests')
-  @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Danh sách lời mời kết bạn' })
   async getFriendRequests(
     @CurrentUser() user: User,
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.friendsService.getFriendRequests(user.id, page, limit);
   }
 
   @Post('requests/:id/accept')
-  @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Chấp nhận lời mời kết bạn' })
   async acceptFriendRequest(
     @CurrentUser() user: User,
-    @Param('id') requestId: string,
+    @Param('id', ParseUUIDPipe) requestId: string,
   ) {
     return this.friendsService.acceptFriendRequest(user.id, requestId);
   }
 
   @Delete('requests/:id')
-  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Từ chối/Xoá lời mời kết bạn' })
   async rejectFriendRequest(
     @CurrentUser() user: User,
-    @Param('id') requestId: string,
+    @Param('id', ParseUUIDPipe) requestId: string,
   ) {
     return this.friendsService.rejectFriendRequest(user.id, requestId);
   }
 
   @Delete(':id')
-  @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Xoá bạn bè' })
   async removeFriend(
     @CurrentUser() user: User,
-    @Param('id') friendId: string,
+    @Param('id', ParseUUIDPipe) friendId: string,
   ) {
     return this.friendsService.removeFriend(user.id, friendId);
   }
 
   @Get('suggestions')
-  @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Gợi ý kết bạn' })
   async getFriendSuggestions(
     @CurrentUser() user: User,
-    @Query('limit') limit = 10,
+    @Query('limit') limit?: string,
   ) {
     return this.friendsService.getFriendSuggestions(user.id, limit);
   }

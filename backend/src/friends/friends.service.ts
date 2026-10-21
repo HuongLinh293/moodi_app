@@ -10,6 +10,7 @@ import { Friend } from './entities/friend.entity';
 import { FriendRequest } from './entities/friend-request.entity';
 import { User } from '../users/entities/user.entity';
 import { AddFriendDto } from './dto/add-friend.dto';
+import { pageParams } from '../common/pagination';
 
 @Injectable()
 export class FriendsService {
@@ -23,8 +24,8 @@ export class FriendsService {
   ) {}
 
   // Get list of friends for a user
-  async getFriends(userId: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+  async getFriends(userId: string, pageQuery?: unknown, limitQuery?: unknown) {
+    const { page, limit, skip } = pageParams(pageQuery, limitQuery);
     const [friends, total] = await this.friendsRepository.findAndCount({
       where: { userId, status: 'accepted' },
       relations: ['friend'],
@@ -97,8 +98,8 @@ export class FriendsService {
   }
 
   // Get incoming friend requests
-  async getFriendRequests(userId: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+  async getFriendRequests(userId: string, pageQuery?: unknown, limitQuery?: unknown) {
+    const { page, limit, skip } = pageParams(pageQuery, limitQuery);
     const [requests, total] = await this.friendRequestsRepository.findAndCount({
       where: { recipientId: userId },
       relations: ['sender'],
@@ -152,11 +153,12 @@ export class FriendsService {
 
   // Reject/Delete friend request
   async rejectFriendRequest(userId: string, requestId: string) {
+    // Người nhận từ chối hoặc người gửi tự huỷ lời mời của mình.
     const request = await this.friendRequestsRepository.findOne({
-      where: {
-        id: requestId,
-        recipientId: userId,
-      },
+      where: [
+        { id: requestId, recipientId: userId },
+        { id: requestId, senderId: userId },
+      ],
     });
 
     if (!request) {
@@ -197,7 +199,8 @@ export class FriendsService {
   }
 
   // Get friend suggestions (users not already friends or requested)
-  async getFriendSuggestions(userId: string, limit = 10) {
+  async getFriendSuggestions(userId: string, limitQuery?: unknown) {
+    const { limit } = pageParams(1, limitQuery, { maxLimit: 20 });
     // Get IDs of existing friends and friend requests
     const friendIds = await this.friendsRepository.find({
       where: [{ userId }, { friendId: userId }],
@@ -282,7 +285,7 @@ export class FriendsService {
       relations: ['sender'],
     });
     if (!request) {
-      throw new Error('Friend request not found');
+      throw new NotFoundException('Lời mời kết bạn không tồn tại');
     }
     return this.formatFriendRequestResponse(request);
   }

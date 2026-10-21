@@ -1,5 +1,23 @@
 # Phòng thực nghiệm bảo mật Moodi
 
+## Backend NestJS (kiến trúc hiện tại)
+
+App đã chuyển từ Firebase sang NestJS + Postgres. Phần dưới đây kiểm thử đúng hệ thống app đang dùng.
+
+```bash
+docker compose -f backend/docker-compose.yml up -d postgres
+./scripts/test_security_nest.sh
+```
+
+- `nest/access-control.mjs`: 56 kịch bản. Mỗi lỗ hổng đã vá (path traversal, lộ email, IDOR, ảnh `javascript:`, đếm like trùng, token còn hiệu lực sau logout, dò email qua thời gian phản hồi…) được thử tấn công lại, cùng các quy tắc phân quyền của nhật ký, vườn chung, reflections và Community (nhóm riêng, chặn, idempotency, rate limit).
+- `nest/moderation.mjs`: cấp quyền admin trong DB, rồi xem báo cáo, gỡ nội dung, khoá tài khoản và kiểm tra audit log.
+
+Script khởi động server tạm ở cổng 3100 (đổi bằng `SECURITY_LAB_PORT`), tắt AI để dữ liệu test không rời máy, và chỉ tạo tài khoản giả với email `@t.vn`. Bảng tổng hợp lỗ hổng và cách sửa nằm trong `docs/api-migration-build-status.md`.
+
+## Firestore (lưu trữ, kiến trúc cũ)
+
+Phần dưới đây thuộc bản Firebase trước khi chuyển đổi, giữ lại để đối chiếu trong báo cáo.
+
 **Chỉ dùng Firebase Emulator, dữ liệu giả. Không deploy các file trong thư mục này.**
 
 Ba phiên bản độc lập:

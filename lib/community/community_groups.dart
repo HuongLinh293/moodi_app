@@ -508,7 +508,9 @@ class _CommunityGroupInviteSheetState extends State<CommunityGroupInviteSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,6 +610,7 @@ class _CommunityGroupInviteSheetState extends State<CommunityGroupInviteSheet> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

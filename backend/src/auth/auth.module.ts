@@ -5,19 +5,23 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { SocialVerifier } from './social-verifier';
 import { User } from '../users/entities/user.entity';
+import { jwtAccessSecret, jwtAccessTtl } from '../config/jwt.config';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'your-secret-key',
-      signOptions: { expiresIn: parseInt(process.env.JWT_EXPIRATION || '3600') },
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: jwtAccessSecret(),
+        signOptions: { expiresIn: jwtAccessTtl() },
+      }),
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, SocialVerifier],
   exports: [AuthService],
 })
 export class AuthModule {}

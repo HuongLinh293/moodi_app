@@ -55,11 +55,31 @@ class Exercise {
       icon: 'reframe',
       description: 'Tìm một cách nhìn cân bằng hơn.',
       steps: [
-        ExerciseStep(key: 'write', title: 'Suy nghĩ đó là gì?', placeholder: 'Viết vài từ...'),
-        ExerciseStep(key: 'write', title: 'Điều gì ủng hộ nó?', placeholder: 'Điều đã thật sự xảy ra...'),
-        ExerciseStep(key: 'write', title: 'Điều gì chưa ủng hộ nó?', placeholder: 'Điều cho thấy bức tranh khác...'),
-        ExerciseStep(key: 'write', title: 'Bạn sẽ nói gì với một người bạn?', placeholder: 'Mình sẽ nói…'),
-        ExerciseStep(key: 'write', title: 'Một cách nhìn cân bằng hơn?', placeholder: 'Có thể mình…'),
+        ExerciseStep(
+          key: 'write',
+          title: 'Suy nghĩ đó là gì?',
+          placeholder: 'Viết vài từ...',
+        ),
+        ExerciseStep(
+          key: 'write',
+          title: 'Điều gì ủng hộ nó?',
+          placeholder: 'Điều đã thật sự xảy ra...',
+        ),
+        ExerciseStep(
+          key: 'write',
+          title: 'Điều gì chưa ủng hộ nó?',
+          placeholder: 'Điều cho thấy bức tranh khác...',
+        ),
+        ExerciseStep(
+          key: 'write',
+          title: 'Bạn sẽ nói gì với một người bạn?',
+          placeholder: 'Mình sẽ nói…',
+        ),
+        ExerciseStep(
+          key: 'write',
+          title: 'Một cách nhìn cân bằng hơn?',
+          placeholder: 'Có thể mình…',
+        ),
       ],
     ),
     'compassion': Exercise(
@@ -70,8 +90,16 @@ class Exercise {
       icon: 'heart',
       description: 'Nói với mình bằng giọng dịu dàng.',
       steps: [
-        ExerciseStep(key: 'write', title: 'Bạn sẽ nói gì với một người bạn thân?', placeholder: 'Mình sẽ nói…'),
-        ExerciseStep(key: 'write', title: 'Nói lại điều đó với chính mình', placeholder: 'Mình cũng xứng đáng…'),
+        ExerciseStep(
+          key: 'write',
+          title: 'Bạn sẽ nói gì với một người bạn thân?',
+          placeholder: 'Mình sẽ nói…',
+        ),
+        ExerciseStep(
+          key: 'write',
+          title: 'Nói lại điều đó với chính mình',
+          placeholder: 'Mình cũng xứng đáng…',
+        ),
       ],
     ),
     'pause': Exercise(
@@ -85,7 +113,11 @@ class Exercise {
         ExerciseStep(key: 'stop', title: 'Dừng lại'),
         ExerciseStep(key: 'breath', title: 'Thở chậm ba lần'),
         ExerciseStep(key: 'name', title: 'Gọi tên cảm xúc'),
-        ExerciseStep(key: 'write', title: 'Điều gì quan trọng lúc này?', placeholder: 'Điều mình quan tâm là…'),
+        ExerciseStep(
+          key: 'write',
+          title: 'Điều gì quan trọng lúc này?',
+          placeholder: 'Điều mình quan tâm là…',
+        ),
         ExerciseStep(key: 'choose', title: 'Bạn muốn làm gì tiếp?'),
       ],
     ),

@@ -29,7 +29,9 @@ class SharedGarden {
     DateTime parseTime(dynamic raw) {
       if (raw == null) return DateTime.now();
       if (raw is DateTime) return raw;
-      if (raw is String) return DateTime.tryParse(raw) ?? DateTime.now();
+      if (raw is String) {
+        return DateTime.tryParse(raw)?.toLocal() ?? DateTime.now();
+      }
       return DateTime.now();
     }
 
@@ -133,7 +135,9 @@ class SharedMoment {
     DateTime parseTime(dynamic raw) {
       if (raw == null) return DateTime.now();
       if (raw is DateTime) return raw;
-      if (raw is String) return DateTime.tryParse(raw) ?? DateTime.now();
+      if (raw is String) {
+        return DateTime.tryParse(raw)?.toLocal() ?? DateTime.now();
+      }
       return DateTime.now();
     }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import '../models/journal_entry.dart';
@@ -7,14 +8,17 @@ class JournalRepository {
   final HttpClient _httpClient;
 
   JournalRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Save or update a journal entry
   Future<void> saveEntry(JournalEntry entry, {String? userId}) async {
+    if (userId == null || userId.isEmpty) {
+      throw StateError('Hãy đăng nhập trước khi lưu.');
+    }
     try {
       final body = {
         'id': entry.id,
-        'timestamp': entry.timestamp.toIso8601String(),
+        'timestamp': entry.timestamp.toUtc().toIso8601String(),
         'emotionKey': entry.emotionKey,
         'intensity': entry.intensity,
         'trigger': entry.trigger,
@@ -30,9 +34,7 @@ class JournalRepository {
         'repeatPreference': entry.repeatPreference,
       };
 
-      if (userId != null) {
-        body['userId'] = userId;
-      }
+      body['userId'] = userId;
 
       final endpoint = entry.id.isEmpty
           ? ApiConfig.entriesEndpoint
@@ -91,11 +93,14 @@ class JournalRepository {
 
       // Also delete associated garden moment if it exists
       try {
-        await _httpClient.delete('${ApiConfig.momentsEndpoint}/garden-$entryId');
+        await _httpClient.delete(
+          '${ApiConfig.momentsEndpoint}/garden-$entryId',
+        );
       } catch (e) {
         // Ignore error if garden moment doesn't exist
         debugPrint(
-            'JournalRepository: No associated garden moment to delete: $e');
+          'JournalRepository: No associated garden moment to delete: $e',
+        );
       }
     } catch (e) {
       debugPrint('JournalRepository: Error deleting entry $e');
@@ -122,17 +127,14 @@ class JournalRepository {
   Stream<List<JournalEntry>> watchEntries({String? userId}) {
     const pollInterval = Duration(seconds: 5);
 
-    return Stream.periodic(
-      pollInterval,
-      (_) async {
-        try {
-          return await fetchEntries(userId: userId);
-        } catch (e) {
-          debugPrint('JournalRepository: Error watching entries: $e');
-          return <JournalEntry>[];
-        }
-      },
-    ).asyncExpand((future) => future.asStream());
+    return Stream.periodic(pollInterval, (_) async {
+      try {
+        return await fetchEntries(userId: userId);
+      } catch (e) {
+        debugPrint('JournalRepository: Error watching entries: $e');
+        rethrow;
+      }
+    }).asyncExpand((future) => future.asStream());
   }
 
   /// Fetch a single entry by ID
@@ -148,7 +150,7 @@ class JournalRepository {
       return null;
     } catch (e) {
       debugPrint('JournalRepository: Error fetching entry: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -159,9 +161,7 @@ class JournalRepository {
     DateTime? endDate,
   }) async {
     try {
-      final queryParams = <String, String>{
-        'emotionKey': emotionKey,
-      };
+      final queryParams = <String, String>{'emotionKey': emotionKey};
 
       if (startDate != null) {
         queryParams['startDate'] = startDate.toIso8601String();
@@ -193,7 +193,7 @@ class JournalRepository {
       return [];
     } catch (e) {
       debugPrint('JournalRepository: Error searching entries: $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -213,7 +213,7 @@ class JournalRepository {
       return [];
     } catch (e) {
       debugPrint('JournalRepository: Error fetching entries for date: $e');
-      return [];
+      rethrow;
     }
   }
 }

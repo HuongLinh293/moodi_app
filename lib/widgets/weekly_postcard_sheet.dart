@@ -114,7 +114,9 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
   @override
   Widget build(BuildContext context) {
     final dominantKey = widget.state.dominantEmotionThisWeek;
-    final dominant = dominantKey != null ? MindraEmotions.all[dominantKey] : null;
+    final dominant = dominantKey != null
+        ? MindraEmotions.all[dominantKey]
+        : null;
     final daysCount = widget.state.checkinDaysThisWeek;
     final entriesCount = widget.state.thisWeekEntries.length;
     final review = widget.state.weeklyReview;
@@ -174,7 +176,10 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
             // Scrollable postcard area
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 child: Column(
                   children: [
                     Text(
@@ -200,7 +205,8 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                           alignment: Alignment.center,
                           child: _showBack
                               ? Transform(
-                                  transform: Matrix4.identity()..rotateY(math.pi),
+                                  transform: Matrix4.identity()
+                                    ..rotateY(math.pi),
                                   alignment: Alignment.center,
                                   child: _buildBackCard(review),
                                 )
@@ -267,10 +273,15 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                            icon: const Icon(
+                              Icons.bookmark_add_outlined,
+                              size: 18,
+                            ),
                             label: Text(
                               'Lưu bưu thiếp',
-                              style: AppTypography.button.copyWith(color: Colors.white),
+                              style: AppTypography.button.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -302,10 +313,7 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
       decoration: BoxDecoration(
         color: const Color(0xFFFDFBF7), // Warm authentic paper tone
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFE8E2D5),
-          width: 1.5,
-        ),
+        border: Border.all(color: const Color(0xFFE8E2D5), width: 1.5),
         boxShadow: AppShadows.card,
       ),
       child: Stack(
@@ -359,7 +367,10 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                     ),
                     // Postage stamp
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
@@ -468,7 +479,11 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                         label: 'Ngày có mặt',
                       ),
                     ),
-                    Container(width: 1, height: 32, color: const Color(0xFFE8E2D5)),
+                    Container(
+                      width: 1,
+                      height: 32,
+                      color: const Color(0xFFE8E2D5),
+                    ),
                     Expanded(
                       child: _buildMiniStat(
                         icon: '🌸',
@@ -476,7 +491,11 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                         label: 'Ghi chép',
                       ),
                     ),
-                    Container(width: 1, height: 32, color: const Color(0xFFE8E2D5)),
+                    Container(
+                      width: 1,
+                      height: 32,
+                      color: const Color(0xFFE8E2D5),
+                    ),
                     Expanded(
                       child: _buildMiniStat(
                         icon: '🌿',
@@ -505,10 +524,7 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
       decoration: BoxDecoration(
         color: const Color(0xFFFAF6EE), // Vintage paper tone
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFE0D8C8),
-          width: 1.5,
-        ),
+        border: Border.all(color: const Color(0xFFE0D8C8), width: 1.5),
         boxShadow: AppShadows.card,
       ),
       padding: const EdgeInsets.all(22),
@@ -571,11 +587,7 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
               const SizedBox(width: 16),
 
               // Vertical dashed divider
-              Container(
-                width: 1,
-                height: 180,
-                color: const Color(0xFFD8CFBF),
-              ),
+              Container(width: 1, height: 180, color: const Color(0xFFD8CFBF)),
 
               const SizedBox(width: 16),
 
@@ -680,10 +692,7 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
             ),
           ),
           const SizedBox(height: 2),
-          Container(
-            height: 1,
-            color: const Color(0xFFD8CFBF),
-          ),
+          Container(height: 1, color: const Color(0xFFD8CFBF)),
         ],
       ),
     );

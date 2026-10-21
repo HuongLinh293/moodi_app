@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import 'user_repository.dart';
@@ -91,17 +92,14 @@ class PostRepository {
   final HttpClient _httpClient;
 
   PostRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Get paginated posts
   Future<PostsPage?> getPosts({int page = 1, int limit = 10}) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.postsEndpoint,
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -116,9 +114,7 @@ class PostRepository {
   /// Get single post by ID
   Future<Post?> getPostById(String postId) async {
     try {
-      final response = await _httpClient.get(
-        ApiConfig.postById(postId),
-      );
+      final response = await _httpClient.get(ApiConfig.postById(postId));
 
       if (response is Map<String, dynamic>) {
         return Post.fromJson(response);
@@ -137,10 +133,7 @@ class PostRepository {
     try {
       final response = await _httpClient.post(
         ApiConfig.postsEndpoint,
-        body: {
-          'content': content,
-          if (imageUrls != null) 'imageUrls': imageUrls,
-        },
+        body: {'content': content, 'imageUrls': ?imageUrls},
       );
 
       if (response is Map<String, dynamic>) {
@@ -166,10 +159,7 @@ class PostRepository {
     try {
       final response = await _httpClient.patch(
         ApiConfig.postById(postId),
-        body: {
-          'content': content,
-          if (imageUrls != null) 'imageUrls': imageUrls,
-        },
+        body: {'content': content, 'imageUrls': ?imageUrls},
       );
 
       if (response is Map<String, dynamic>) {
@@ -188,9 +178,7 @@ class PostRepository {
   /// Delete a post
   Future<bool> deletePost(String postId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.postById(postId),
-      );
+      await _httpClient.delete(ApiConfig.postById(postId));
       return true;
     } catch (e) {
       debugPrint('PostRepository: deletePost error: $e');
@@ -201,10 +189,7 @@ class PostRepository {
   /// Like a post
   Future<bool> likePost(String postId) async {
     try {
-      await _httpClient.post(
-        ApiConfig.likePost(postId),
-        body: {},
-      );
+      await _httpClient.post(ApiConfig.likePost(postId), body: {});
       return true;
     } catch (e) {
       debugPrint('PostRepository: likePost error: $e');
@@ -215,9 +200,7 @@ class PostRepository {
   /// Unlike a post
   Future<bool> unlikePost(String postId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.likePost(postId),
-      );
+      await _httpClient.delete(ApiConfig.likePost(postId));
       return true;
     } catch (e) {
       debugPrint('PostRepository: unlikePost error: $e');

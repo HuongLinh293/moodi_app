@@ -507,7 +507,9 @@ class _CommunityChatPageState extends State<CommunityChatPage>
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Column(
           children: [
             Expanded(
               child: first
@@ -701,6 +703,7 @@ class _CommunityChatPageState extends State<CommunityChatPage>
                     ),
             ),
           ],
+        ),
         ),
       ),
     );

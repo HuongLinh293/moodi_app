@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import 'user_repository.dart';
@@ -23,9 +24,7 @@ class GroupMember {
     return GroupMember(
       id: json['id'] as String? ?? '',
       userId: json['userId'] as String? ?? '',
-      user: UserProfile.fromJson(
-        json['user'] as Map<String, dynamic>? ?? {},
-      ),
+      user: UserProfile.fromJson(json['user'] as Map<String, dynamic>? ?? {}),
       role: json['role'] as String? ?? 'member',
       joinedAt: DateTime.parse(
         json['joinedAt'] as String? ?? DateTime.now().toIso8601String(),
@@ -154,17 +153,14 @@ class GroupRepository {
   final HttpClient _httpClient;
 
   GroupRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Get user's groups
   Future<GroupsPage?> getGroups({int page = 1, int limit = 10}) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.groupsEndpoint,
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -185,11 +181,7 @@ class GroupRepository {
     try {
       final response = await _httpClient.post(
         ApiConfig.groupsEndpoint,
-        body: {
-          'name': name,
-          if (description != null) 'description': description,
-          if (image != null) 'image': image,
-        },
+        body: {'name': name, 'description': ?description, 'image': ?image},
       );
 
       if (response is Map<String, dynamic>) {
@@ -208,9 +200,7 @@ class GroupRepository {
   /// Get group details
   Future<Group?> getGroupById(String groupId) async {
     try {
-      final response = await _httpClient.get(
-        ApiConfig.groupById(groupId),
-      );
+      final response = await _httpClient.get(ApiConfig.groupById(groupId));
 
       if (response is Map<String, dynamic>) {
         return Group.fromJson(response);
@@ -231,11 +221,7 @@ class GroupRepository {
     try {
       final response = await _httpClient.patch(
         ApiConfig.groupById(groupId),
-        body: {
-          if (name != null) 'name': name,
-          if (description != null) 'description': description,
-          if (image != null) 'image': image,
-        },
+        body: {'name': ?name, 'description': ?description, 'image': ?image},
       );
 
       if (response is Map<String, dynamic>) {
@@ -254,9 +240,7 @@ class GroupRepository {
   /// Delete group
   Future<bool> deleteGroup(String groupId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.groupById(groupId),
-      );
+      await _httpClient.delete(ApiConfig.groupById(groupId));
       return true;
     } catch (e) {
       debugPrint('GroupRepository: deleteGroup error: $e');
@@ -265,15 +249,15 @@ class GroupRepository {
   }
 
   /// Get group members
-  Future<MembersPage?> getGroupMembers(String groupId,
-      {int page = 1, int limit = 10}) async {
+  Future<MembersPage?> getGroupMembers(
+    String groupId, {
+    int page = 1,
+    int limit = 10,
+  }) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.groupMembers(groupId),
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -302,9 +286,7 @@ class GroupRepository {
   /// Remove member from group
   Future<bool> removeMember(String groupId, String userId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.removeGroupMember(groupId, userId),
-      );
+      await _httpClient.delete(ApiConfig.removeGroupMember(groupId, userId));
       return true;
     } catch (e) {
       debugPrint('GroupRepository: removeMember error: $e');
@@ -315,10 +297,7 @@ class GroupRepository {
   /// Leave group
   Future<bool> leaveGroup(String groupId) async {
     try {
-      await _httpClient.post(
-        ApiConfig.leaveGroup(groupId),
-        body: {},
-      );
+      await _httpClient.post(ApiConfig.leaveGroup(groupId), body: {});
       return true;
     } catch (e) {
       debugPrint('GroupRepository: leaveGroup error: $e');

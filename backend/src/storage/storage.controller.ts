@@ -9,11 +9,13 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { StorageService } from './storage.service';
 import { UploadFileDto } from './dto/upload-file.dto';
 import { JwtGuard } from '../auth/guards/jwt.guard';
+import { OptionalJwtGuard } from '../auth/guards/optional-jwt.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 
@@ -35,18 +37,20 @@ export class StorageController {
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Chi tiết file' })
   async getFile(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user?: User,
   ) {
     return this.storageService.getFile(id, user?.id);
   }
 
   @Get(':id/content')
+  @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Tải xuống file (base64)' })
   async getFileContent(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user?: User,
   ) {
     return this.storageService.getFileContent(id, user?.id);
@@ -57,7 +61,7 @@ export class StorageController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Xóa file' })
   async deleteFile(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
   ) {
     return this.storageService.deleteFile(id, user.id);
@@ -68,17 +72,18 @@ export class StorageController {
   @ApiOperation({ summary: 'Danh sách file của người dùng' })
   async getUserFiles(
     @CurrentUser() user: User,
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.storageService.getUserFiles(user.id, page, limit);
   }
 
   @Get('related/:entityType/:entityId')
+  @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Danh sách file liên quan' })
   async getFilesByRelatedEntity(
     @Param('entityType') entityType: string,
-    @Param('entityId') entityId: string,
+    @Param('entityId', ParseUUIDPipe) entityId: string,
     @CurrentUser() user?: User,
   ) {
     return this.storageService.getFilesByRelatedEntity(

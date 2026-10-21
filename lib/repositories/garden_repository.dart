@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import '../models/garden_moment.dart';
@@ -7,10 +8,13 @@ class GardenRepository {
   final HttpClient _httpClient;
 
   GardenRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Save or update a garden moment
   Future<void> saveMoment(GardenMoment moment, {String? userId}) async {
+    if (userId == null || userId.isEmpty) {
+      throw StateError('Hãy đăng nhập trước khi lưu.');
+    }
     try {
       final body = {
         'id': moment.id,
@@ -18,13 +22,11 @@ class GardenRepository {
         'monthKey': moment.monthKey,
         'bedIndex': moment.bedIndex,
         'slotIndex': moment.slotIndex,
-        'plantedAt': moment.plantedAt.toIso8601String(),
+        'plantedAt': moment.plantedAt.toUtc().toIso8601String(),
         'appearanceVariant': moment.appearanceVariant,
       };
 
-      if (userId != null) {
-        body['userId'] = userId;
-      }
+      body['userId'] = userId;
 
       final endpoint = moment.id.isEmpty
           ? ApiConfig.momentsEndpoint
@@ -94,7 +96,7 @@ class GardenRepository {
       return [];
     } catch (e) {
       debugPrint('GardenRepository: Error fetching moments $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -104,17 +106,14 @@ class GardenRepository {
   Stream<List<GardenMoment>> watchMoments({String? userId}) {
     const pollInterval = Duration(seconds: 5);
 
-    return Stream.periodic(
-      pollInterval,
-      (_) async {
-        try {
-          return await fetchMoments(userId: userId);
-        } catch (e) {
-          debugPrint('GardenRepository: Error watching moments: $e');
-          return <GardenMoment>[];
-        }
-      },
-    ).asyncExpand((future) => future.asStream());
+    return Stream.periodic(pollInterval, (_) async {
+      try {
+        return await fetchMoments(userId: userId);
+      } catch (e) {
+        debugPrint('GardenRepository: Error watching moments: $e');
+        rethrow;
+      }
+    }).asyncExpand((future) => future.asStream());
   }
 
   /// Fetch a single moment by ID
@@ -130,7 +129,7 @@ class GardenRepository {
       return null;
     } catch (e) {
       debugPrint('GardenRepository: Error fetching moment: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -142,9 +141,7 @@ class GardenRepository {
   }) async {
     try {
       final monthKey = '${year.toString()}-${month.toString().padLeft(2, '0')}';
-      final queryParams = <String, String>{
-        'monthKey': monthKey,
-      };
+      final queryParams = <String, String>{'monthKey': monthKey};
 
       if (userId != null) {
         queryParams['userId'] = userId;
@@ -172,7 +169,7 @@ class GardenRepository {
       return [];
     } catch (e) {
       debugPrint('GardenRepository: Error fetching moments for month: $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -182,9 +179,7 @@ class GardenRepository {
     String? userId,
   }) async {
     try {
-      final queryParams = <String, String>{
-        'bedIndex': bedIndex.toString(),
-      };
+      final queryParams = <String, String>{'bedIndex': bedIndex.toString()};
 
       if (userId != null) {
         queryParams['userId'] = userId;
@@ -212,13 +207,14 @@ class GardenRepository {
       return [];
     } catch (e) {
       debugPrint('GardenRepository: Error fetching moments for bed: $e');
-      return [];
+      rethrow;
     }
   }
 
   /// Get moments grouped by bed
-  Future<Map<int, List<GardenMoment>>> fetchMomentsGroupedByBed(
-      {String? userId}) async {
+  Future<Map<int, List<GardenMoment>>> fetchMomentsGroupedByBed({
+    String? userId,
+  }) async {
     try {
       final moments = await fetchMoments(userId: userId);
       final grouped = <int, List<GardenMoment>>{};

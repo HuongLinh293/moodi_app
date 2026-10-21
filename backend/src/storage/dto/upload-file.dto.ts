@@ -1,28 +1,31 @@
-import { IsString, IsOptional, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsUUID, IsIn, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UploadFileDto {
-  @ApiProperty({ example: 'file.pdf' })
+  @ApiProperty({ example: 'photo.jpg' })
   @IsString()
+  @MaxLength(255)
   filename: string;
 
   @ApiProperty({ example: 'base64_encoded_file_content' })
   @IsString()
   fileContent: string;
 
-  @ApiProperty({ example: 'application/pdf' })
-  @IsString()
-  @IsOptional()
-  mimeType?: string;
+  @ApiProperty({
+    example: 'image/jpeg',
+    enum: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'],
+  })
+  @IsIn(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'])
+  mimeType: string;
 
-  @ApiProperty({ example: 'public', enum: ['public', 'private'] })
+  @ApiProperty({ example: 'private', enum: ['public', 'private'], required: false })
   @IsEnum(['public', 'private'])
   @IsOptional()
   accessType?: string;
 
-  @ApiProperty({ example: 'post', required: false })
+  @ApiProperty({ example: 'post', enum: ['post', 'message', 'avatar', 'group'], required: false })
   @IsOptional()
-  @IsString()
+  @IsIn(['post', 'message', 'avatar', 'group'])
   relatedEntityType?: string;
 
   @ApiProperty({ example: 'uuid-of-post', required: false })

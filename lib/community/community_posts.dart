@@ -171,7 +171,9 @@ class _CommunityComposerState extends State<CommunityComposer> {
         title: Text(widget.message ? 'Viết tin nhắn' : 'Viết chia sẻ'),
       ),
       body: SafeArea(
-        child: ListView(
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             Container(
@@ -313,6 +315,7 @@ class _CommunityComposerState extends State<CommunityComposer> {
               ),
             ),
           ],
+          ),
         ),
       ),
     ),
@@ -326,10 +329,12 @@ class CommunityFeed extends StatefulWidget {
     this.space = 'public',
     this.name = 'Cộng đồng chung',
     this.author,
+    this.emptyAction,
   });
   final CommunityRepository repo;
   final String space, name;
   final String? author;
+  final Widget? emptyAction;
   @override
   State<CommunityFeed> createState() => _CommunityFeedState();
 }
@@ -409,11 +414,12 @@ class _CommunityFeedState extends State<CommunityFeed> {
               if (selectedMood != null) 'mood': selectedMood,
             }),
             emptyTitle: selectedMood == null
-                ? 'Một câu chuyện có thể bắt đầu từ đây'
+                ? 'Hôm nay điều gì đang ở trong lòng bạn?'
                 : 'Chưa có chia sẻ nào về "$selectedMood"',
             emptyDescription: selectedMood == null
-                ? 'Chia sẻ một khoảnh khắc, một bức ảnh hoặc điều bạn đang nghĩ.'
-                : 'Hãy là người đầu tiên chia sẻ cảm xúc này với cộng đồng.',
+                ? 'Viết một chia sẻ, tìm người đồng cảm, hoặc tạo nhóm riêng cho người bạn tin.'
+                : 'Hãy là người đầu tiên chia sẻ cảm xúc này.',
+            emptyAction: selectedMood == null ? widget.emptyAction : null,
             header: null,
             builder: (post, refresh) => CommunityPostCard(
               key: ValueKey(post['id']),
@@ -532,6 +538,18 @@ class _CommunityPostCardState extends State<CommunityPostCard> {
                 onSelected: (value) async {
                   if (value == 'report') {
                     await reportCommunity(context, widget.repo, scope);
+                  } else if (value == 'block') {
+                    if (await communityConfirm(
+                      context,
+                      'Chặn người này?',
+                      'Bạn sẽ không còn thấy bài của họ, và hai bên không tương tác được.',
+                    )) {
+                      await widget.repo.mutate('friendship', {
+                        'target': p['author'],
+                        'kind': 'block',
+                      });
+                      widget.refresh();
+                    }
                   } else if (value == 'delete') {
                     if (await communityConfirm(
                       context,
@@ -561,11 +579,16 @@ class _CommunityPostCardState extends State<CommunityPostCard> {
                             : 'Mở bình luận',
                       ),
                     ),
-                  if (!own)
+                  if (!own) ...[
                     const PopupMenuItem(
                       value: 'report',
                       child: Text('Báo cáo'),
                     ),
+                    const PopupMenuItem(
+                      value: 'block',
+                      child: Text('Chặn người này'),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -616,6 +639,14 @@ class _CommunityPostCardState extends State<CommunityPostCard> {
                 ),
                 label: Text('Đồng cảm · ${p['likes'] ?? 0}'),
               ),
+              if (!own)
+                TextButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => reportCommunity(context, widget.repo, scope),
+                  icon: const Icon(Icons.flag_outlined, size: 20),
+                  label: const Text('Báo cáo'),
+                ),
               if (!widget.detail)
                 TextButton.icon(
                   onPressed: () async {

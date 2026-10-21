@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:mindra/core/http_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -31,18 +31,12 @@ void main() {
         var calls = 0;
         final repo = repository((_) async {
           calls++;
-          throw FirebaseFunctionsException(code: code, message: 'server error');
+          throw ApiException(code: code, message: 'server error');
         });
         for (var i = 0; i < 2; i++) {
           await expectLater(
             repo.mutate('sendMessage', {'target': 'bob', 'text': 'hello'}),
-            throwsA(
-              isA<FirebaseFunctionsException>().having(
-                (e) => e.code,
-                'code',
-                code,
-              ),
-            ),
+            throwsA(isA<ApiException>().having((e) => e.code, 'code', code)),
           );
         }
         expect(calls, 2);
@@ -60,10 +54,7 @@ void main() {
             load: (cursor) async {
               cursors.add(cursor);
               if (cursor != null && fail) {
-                throw FirebaseFunctionsException(
-                  code: 'unavailable',
-                  message: 'Mất kết nối',
-                );
+                throw ApiException(code: 'unavailable', message: 'Mất kết nối');
               }
               return cursor == null
                   ? {
@@ -109,7 +100,7 @@ void main() {
           key: key,
           load: (_) async {
             if (revoked) {
-              throw FirebaseFunctionsException(
+              throw ApiException(
                 code: 'permission-denied',
                 message: 'Không còn quyền',
               );
@@ -196,7 +187,7 @@ void main() {
       await tester.pump();
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
       pending!.completeError(
-        FirebaseFunctionsException(code: 'unavailable', message: 'Mất kết nối'),
+        ApiException(code: 'unavailable', message: 'Mất kết nối'),
       );
       await tester.pumpAndSettle();
       expect(find.text('Chào bạn'), findsOneWidget);

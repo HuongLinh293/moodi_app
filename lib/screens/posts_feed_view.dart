@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../repositories/post_repository.dart';
 import '../state/mindra_state.dart';
 
@@ -18,9 +19,9 @@ class _PostsFeedViewState extends State<PostsFeedView> {
   void initState() {
     super.initState();
     // Load posts when view initializes
-    Future.microtask(
-      () => context.read<MindraState>()._loadPosts(),
-    );
+    Future.microtask(() {
+      if (mounted) context.read<MindraState>().fetchPosts();
+    });
   }
 
   @override
@@ -34,17 +35,15 @@ class _PostsFeedViewState extends State<PostsFeedView> {
 
     setState(() => _isPosting = true);
     try {
-      await context
-          .read<MindraState>()
-          .createPost(_contentCtrl.text, null);
+      await context.read<MindraState>().createPost(_contentCtrl.text, null);
+      if (!mounted) return;
       _contentCtrl.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bài viết đã được tạo')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Bài viết đã được tạo')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi: ${e.toString()}')),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString()}')));
     } finally {
       if (mounted) setState(() => _isPosting = false);
     }
@@ -55,11 +54,10 @@ class _PostsFeedViewState extends State<PostsFeedView> {
     final state = context.watch<MindraState>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bảng Tin'),
-        elevation: 0,
-      ),
-      body: Column(
+      appBar: AppBar(title: const Text('Bảng Tin'), elevation: 0),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Column(
         children: [
           // Create Post Card
           Padding(
@@ -87,8 +85,10 @@ class _PostsFeedViewState extends State<PostsFeedView> {
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                             maxLines: null,
                           ),
@@ -107,7 +107,9 @@ class _PostsFeedViewState extends State<PostsFeedView> {
                               onPressed: () {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Tính năng upload sẽ được thêm'),
+                                    content: Text(
+                                      'Tính năng upload sẽ được thêm',
+                                    ),
                                   ),
                                 );
                               },
@@ -171,6 +173,7 @@ class _PostsFeedViewState extends State<PostsFeedView> {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -179,10 +182,7 @@ class PostCard extends StatelessWidget {
   final Post post;
   final MindraState state;
 
-  const PostCard({
-    required this.post,
-    required this.state,
-  });
+  const PostCard({super.key, required this.post, required this.state});
 
   @override
   Widget build(BuildContext context) {
@@ -220,10 +220,7 @@ class PostCard extends StatelessWidget {
                       ),
                       Text(
                         '@${post.author.username}',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                     ],
                   ),
@@ -233,10 +230,7 @@ class PostCard extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Content
-            Text(
-              post.content,
-              style: const TextStyle(fontSize: 14),
-            ),
+            Text(post.content, style: const TextStyle(fontSize: 14)),
 
             // Images
             if (post.imageUrls != null && post.imageUrls!.isNotEmpty)
@@ -255,13 +249,12 @@ class PostCard extends StatelessWidget {
                             width: 80,
                             height: 80,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  color: Colors.grey[200],
-                                  child: const Icon(Icons.image),
-                                ),
+                            errorBuilder: (_, _, _) => Container(
+                              width: 80,
+                              height: 80,
+                              color: Colors.grey[200],
+                              child: const Icon(Icons.image),
+                            ),
                           ),
                         ),
                       )
@@ -274,10 +267,7 @@ class PostCard extends StatelessWidget {
             // Timestamp
             Text(
               _formatTime(post.createdAt),
-              style: TextStyle(
-                color: Colors.grey[500],
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.grey[500], fontSize: 12),
             ),
 
             const SizedBox(height: 12),
@@ -296,9 +286,7 @@ class PostCard extends StatelessWidget {
                       onPressed: () =>
                           context.read<MindraState>().likePost(post.id),
                       icon: Icon(
-                        post.isLiked
-                            ? Icons.favorite
-                            : Icons.favorite_border,
+                        post.isLiked ? Icons.favorite : Icons.favorite_border,
                         color: post.isLiked ? Colors.red : Colors.grey,
                         size: 20,
                       ),

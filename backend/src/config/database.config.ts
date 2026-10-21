@@ -12,6 +12,16 @@ import { ConversationParticipant } from '../chat/entities/conversation-participa
 import { Message } from '../chat/entities/message.entity';
 import { StorageFile } from '../storage/entities/storage-file.entity';
 import { Notification } from '../notifications/entities/notification.entity';
+import { JournalEntry } from '../entries/entities/journal-entry.entity';
+import { GardenMoment } from '../moments/entities/garden-moment.entity';
+import {
+  SharedGarden,
+  SharedGardenMember,
+  SharedMoment,
+  SharedMomentCare,
+} from '../shared-gardens/entities/shared-garden.entity';
+import { AiReflection } from '../reflections/entities/ai-reflection.entity';
+import { COMMUNITY_ENTITIES } from '../community/community.entities';
 
 export const databaseConfig = (): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -34,6 +44,14 @@ export const databaseConfig = (): TypeOrmModuleOptions => ({
     Message,
     StorageFile,
     Notification,
+    JournalEntry,
+    GardenMoment,
+    SharedGarden,
+    SharedGardenMember,
+    SharedMoment,
+    SharedMomentCare,
+    AiReflection,
+    ...COMMUNITY_ENTITIES,
   ],
   synchronize: process.env.NODE_ENV !== 'production',
   logging: process.env.NODE_ENV === 'development',

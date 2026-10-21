@@ -34,7 +34,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
     with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _hasError = false;
-  late final AIReflection _reflection;
+  late AIReflection _reflection;
   String? _userFeedback;
   bool _microGoalSaved = false;
   late List<String> _possibleEmotions;
@@ -75,7 +75,11 @@ class _AIReflectionViewState extends State<AIReflectionView>
           situation: widget.entry.situation,
           thought: widget.entry.thought,
         );
-    widget.state.cacheAIReflection(widget.entry.id, _reflection);
+    if (widget.state.reflectionForEntry(widget.entry.id) == null) {
+      unawaited(_loadServerReflection());
+    } else {
+      widget.state.cacheAIReflection(widget.entry.id, _reflection);
+    }
     _possibleEmotions = List.of(_reflection.possibleEmotions);
     _possibleTrigger = _reflection.possibleTrigger;
     _intensifyingThought = _reflection.intensifyingThought;
@@ -97,6 +101,34 @@ class _AIReflectionViewState extends State<AIReflectionView>
     );
 
     _startLoading();
+  }
+
+  Future<void> _loadServerReflection() async {
+    try {
+      final generated = await widget.state.fetchOrGenerateAIReflection(
+        widget.entry,
+      );
+      if (!mounted) return;
+      _applyReflection(generated);
+    } catch (_) {
+      if (mounted) widget.state.cacheAIReflection(widget.entry.id, _reflection);
+    }
+  }
+
+  void _applyReflection(AIReflection reflection) {
+    setState(() {
+      _reflection = reflection;
+      _possibleEmotions = List.of(reflection.possibleEmotions);
+      _possibleTrigger = reflection.possibleTrigger;
+      _intensifyingThought = reflection.intensifyingThought;
+      _balancedThought = reflection.balancedThought;
+      _reflectionQuestion = reflection.reflectionQuestion;
+      _recommendedExercise = reflection.recommendedExercise;
+      _recommendationReason = reflection.recommendationReason;
+      _microGoalPrompt = reflection.microGoalPrompt;
+      _userFeedback = reflection.userFeedback;
+      _recommendationsDismissed = reflection.recommendationsDismissed;
+    });
   }
 
   void _startLoading() {
@@ -1430,7 +1462,9 @@ class _ReflectionEditSheetState extends State<_ReflectionEditSheet> {
         ),
         child: SafeArea(
           top: false,
-          child: Column(
+          child: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Column(
             children: [
               const SizedBox(height: 12),
               Container(
@@ -1533,6 +1567,7 @@ class _ReflectionEditSheetState extends State<_ReflectionEditSheet> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

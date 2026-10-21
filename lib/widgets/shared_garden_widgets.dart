@@ -56,7 +56,9 @@ class SharedGardenBedView extends StatelessWidget {
       );
     }
     const height = 320.0;
-    final weather = GardenWeather.inferFromEmotions(moments.map((m) => m.emotionKey));
+    final weather = GardenWeather.inferFromEmotions(
+      moments.map((m) => m.emotionKey),
+    );
     return Semantics(
       label: moments.isEmpty
           ? 'Luống vườn sẻ chia đang chờ khoảnh khắc đầu tiên.'
@@ -98,7 +100,9 @@ class SharedGardenBedView extends StatelessWidget {
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Thời tiết vườn sẻ chia: ${weather.label} - ${weather.description}'),
+                        content: Text(
+                          'Thời tiết vườn sẻ chia: ${weather.label} - ${weather.description}',
+                        ),
                         duration: const Duration(seconds: 3),
                       ),
                     );
@@ -230,18 +234,24 @@ class _SharedSwayingFlowerState extends State<_SharedSwayingFlower>
     );
     _bounceAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.85)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 0.85,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 25,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.85, end: 1.18)
-            .chain(CurveTween(curve: Curves.easeOutBack)),
+        tween: Tween<double>(
+          begin: 0.85,
+          end: 1.18,
+        ).chain(CurveTween(curve: Curves.easeOutBack)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.18, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
+        tween: Tween<double>(
+          begin: 1.18,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
         weight: 30,
       ),
     ]).animate(_bounceController!);
@@ -282,10 +292,7 @@ class _SharedSwayingFlowerState extends State<_SharedSwayingFlower>
             decoration: BoxDecoration(
               color: widget.isMe ? AppColors.blue : AppColors.orange,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white,
-                width: 1.5,
-              ),
+              border: Border.all(color: Colors.white, width: 1.5),
             ),
             child: Text(
               widget.moment.authorName.isNotEmpty
@@ -305,19 +312,14 @@ class _SharedSwayingFlowerState extends State<_SharedSwayingFlower>
             top: -4,
             right: -4,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: 1,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(
                 color: AppColors.paper,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.line),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: 0.06,
-                    ),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 4,
                   ),
                 ],
@@ -363,10 +365,7 @@ class _SharedSwayingFlowerState extends State<_SharedSwayingFlower>
           final scale = _bounceController!.isAnimating
               ? _bounceAnimation.value
               : 1.0;
-          return Transform.scale(
-            scale: scale,
-            child: child,
-          );
+          return Transform.scale(scale: scale, child: child);
         },
         child: content,
       );
@@ -627,8 +626,7 @@ void showSharedMomentSheet({
                                 child: const Text('Hủy'),
                               ),
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.pop(dialogCtx, true),
+                                onPressed: () => Navigator.pop(dialogCtx, true),
                                 child: const Text('Gỡ'),
                               ),
                             ],
@@ -892,8 +890,9 @@ void showJoinGardenDialog({
   required MindraState state,
 }) {
   final controller = TextEditingController();
-  final nameController =
-      TextEditingController(text: state.sharedDisplayNameSuggestion);
+  final nameController = TextEditingController(
+    text: state.sharedDisplayNameSuggestion,
+  );
   bool isLoading = false;
   String? errorText;
 
@@ -914,7 +913,9 @@ void showJoinGardenDialog({
               color: AppColors.paper,
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            child: Column(
+            child: GestureDetector(
+              onTap: () => FocusScope.of(sheetContext).unfocus(),
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1031,6 +1032,7 @@ void showJoinGardenDialog({
                   ),
                 ),
               ],
+            ),
             ),
           ),
         ),

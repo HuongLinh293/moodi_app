@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 
@@ -92,14 +93,12 @@ class UserRepository {
   final HttpClient _httpClient;
 
   UserRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Get user profile by ID
   Future<UserProfile?> getUserById(String userId) async {
     try {
-      final response = await _httpClient.get(
-        ApiConfig.userById(userId),
-      );
+      final response = await _httpClient.get(ApiConfig.userById(userId));
 
       if (response is Map<String, dynamic>) {
         return UserProfile.fromJson(response);
@@ -142,10 +141,7 @@ class UserRepository {
     try {
       final response = await _httpClient.patch(
         ApiConfig.userById(userId),
-        body: {
-          if (displayName != null) 'displayName': displayName,
-          if (bio != null) 'bio': bio,
-        },
+        body: {'displayName': ?displayName, 'bio': ?bio},
       );
 
       if (response is Map<String, dynamic>) {
@@ -179,9 +175,7 @@ class UserRepository {
   /// Get user statistics
   Future<UserStats?> getUserStats(String userId) async {
     try {
-      final response = await _httpClient.get(
-        ApiConfig.userStats(userId),
-      );
+      final response = await _httpClient.get(ApiConfig.userStats(userId));
 
       if (response is Map<String, dynamic>) {
         return UserStats.fromJson(response);

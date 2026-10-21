@@ -8,7 +8,9 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
+import { UsePipes, ValidationPipe } from '@nestjs/common';
+import { WsException } from '@nestjs/websockets';
+import { WsOnlineStatusDto, WsSendMessageDto, WsTypingDto } from './dto/ws-events.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ChatService } from './chat.service';
 
@@ -22,10 +24,18 @@ interface AuthenticatedSocket {
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
     credentials: true,
   },
 })
+// HTTP ValidationPipe toàn cục không áp dụng cho WebSocket; cần khai báo riêng.
+@UsePipes(
+  new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    exceptionFactory: () => new WsException('Dữ liệu không hợp lệ'),
+  }),
+)
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -62,7 +72,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       console.log(`User ${socket.userId} connected`);
     } catch (error) {
-      console.error('WebSocket connection error:', error);
+      console.warn('WebSocket connection rejected');
       socket.disconnect();
     }
   }
@@ -85,7 +95,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('send_message')
   async handleSendMessage(
     @ConnectedSocket() socket: any,
-    @MessageBody() data: { conversationId: string; content: string; imageUrls?: string[] },
+    @MessageBody() data: WsSendMessageDto,
   ) {
     try {
       if (!socket.userId) {
@@ -127,7 +137,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('typing')
   async handleTyping(
     @ConnectedSocket() socket: any,
-    @MessageBody() data: { conversationId: string; isTyping: boolean },
+    @MessageBody() data: WsTypingDto,
   ) {
     try {
       if (!socket.userId) {
@@ -162,18 +172,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('online_status')
   async handleOnlineStatus(
     @ConnectedSocket() socket: any,
-    @MessageBody() data: { isOnline: boolean },
+    @MessageBody() data: WsOnlineStatusDto,
   ) {
     try {
       if (!socket.userId) {
         return { error: 'Không xác thực' };
       }
 
-      // Broadcast online status to all connected users
-      this.server.emit('user_online_status', {
-        userId: socket.userId,
-        isOnline: data.isOnline,
-      });
+      // Chỉ báo trạng thái cho bạn bè, không phát cho toàn bộ người dùng.
+      const friendIds = await this.chatService.friendIds(socket.userId);
+      for (const friendId of friendIds) {
+        this.server.to(`user:${friendId}`).emit('user_online_status', {
+          userId: socket.userId,
+          isOnline: data.isOnline,
+        });
+      }
 
       return { success: true };
     } catch (error) {

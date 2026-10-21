@@ -220,9 +220,7 @@ class _GardenViewState extends State<GardenView> {
                   Expanded(
                     child: Text(
                       _monthTitle(monthKey),
-                      style: AppTypography.displayMedium.copyWith(
-                        fontSize: 28,
-                      ),
+                      style: AppTypography.displayMedium.copyWith(fontSize: 28),
                     ),
                   ),
                   if (months.length > 1)
@@ -288,12 +286,8 @@ class _GardenViewState extends State<GardenView> {
                   height: 48,
                   child: TextButton(
                     onPressed: () => _openMomentList(liveMoments),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.ink,
-                    ),
-                    child: Text(
-                      'Xem ${liveMoments.length} khoảnh khắc đã giữ',
-                    ),
+                    style: TextButton.styleFrom(foregroundColor: AppColors.ink),
+                    child: Text('Xem ${liveMoments.length} khoảnh khắc đã giữ'),
                   ),
                 ),
               ],

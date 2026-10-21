@@ -255,10 +255,10 @@ class _OnboardingViewState extends State<OnboardingView> {
             ),
             const SizedBox(height: 16),
             Text(
-              '• Ghi chép được đồng bộ lên Firebase theo tài khoản, bao gồm tài khoản khách ẩn danh.\n'
-              '• Gợi ý phản tư hiện dựa trên mẫu có sẵn trong ứng dụng, không phải phân tích AI cá nhân.\n'
+              '• Kiểm tra trạng thái đồng bộ của ghi chép. Nội dung chưa đồng bộ có thể chỉ được giữ trong phiên này.\n'
+              '• Gợi ý phản tư hỗ trợ tự nhìn lại cảm xúc, không phải chẩn đoán.\n'
               '• Không bán dữ liệu, không chia sẻ với bên thứ ba cho mục đích quảng cáo.\n'
-              '• Bạn có toàn quyền xuất hoặc xóa vĩnh viễn toàn bộ dữ liệu bất kỳ lúc nào trong phần Cài đặt.',
+              '• Bạn có thể xuất ghi chép trong Cài đặt. Việc xóa dữ liệu trên máy chủ cần kết nối và xác nhận thành công.',
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
                 height: 1.5,

@@ -7,6 +7,7 @@ import { PostLike } from './entities/post-like.entity';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { User } from '../users/entities/user.entity';
+import { pageParams } from '../common/pagination';
 
 @Injectable()
 export class PostsService {
@@ -29,11 +30,12 @@ export class PostsService {
     return this.toPostResponse(post);
   }
 
-  async findAll(page = 1, limit = 10): Promise<any> {
+  async findAll(pageQuery?: unknown, limitQuery?: unknown): Promise<any> {
+    const { page, limit, skip } = pageParams(pageQuery, limitQuery);
     const [posts, total] = await this.postsRepository.findAndCount({
-      relations: ['author', 'likes'],
+      relations: ['author'],
       order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
+      skip,
       take: limit,
     });
 
@@ -49,7 +51,7 @@ export class PostsService {
   async findById(id: string): Promise<any> {
     const post = await this.postsRepository.findOne({
       where: { id },
-      relations: ['author', 'likes'],
+      relations: ['author'],
     });
 
     if (!post) {
@@ -97,31 +99,19 @@ export class PostsService {
       throw new NotFoundException('Bài viết không tồn tại');
     }
 
-    // Check if already liked
-    const existingLike = await this.postLikesRepository.findOne({
-      where: { postId, userId: user.id },
-    });
+    // INSERT ... ON CONFLICT DO NOTHING: hai yêu cầu like song song chỉ tính một lần.
+    const inserted = await this.postLikesRepository
+      .createQueryBuilder()
+      .insert()
+      .values({ id: uuid(), postId, userId: user.id })
+      .orIgnore()
+      .execute();
 
-    if (existingLike) {
-      return this.toPostResponse(post);
+    if ((inserted.raw as unknown[]).length > 0) {
+      await this.postsRepository.increment({ id: postId }, 'likesCount', 1);
     }
 
-    // Create like
-    const like = this.postLikesRepository.create({
-      id: uuid(),
-      post,
-      postId,
-      user,
-      userId: user.id,
-    });
-
-    await this.postLikesRepository.save(like);
-
-    // Update likes count
-    post.likesCount++;
-    await this.postsRepository.save(post);
-
-    return this.toPostResponse(post);
+    return this.findById(postId);
   }
 
   async unlike(postId: string, user: User): Promise<any> {
@@ -139,13 +129,12 @@ export class PostsService {
       return this.toPostResponse(post);
     }
 
-    await this.postLikesRepository.delete(like.id);
+    const removed = await this.postLikesRepository.delete(like.id);
+    if (removed.affected) {
+      await this.postsRepository.decrement({ id: postId }, 'likesCount', 1);
+    }
 
-    // Update likes count
-    post.likesCount--;
-    await this.postsRepository.save(post);
-
-    return this.toPostResponse(post);
+    return this.findById(postId);
   }
 
   private toPostResponse(post: Post): any {

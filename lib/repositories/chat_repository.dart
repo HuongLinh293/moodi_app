@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import 'user_repository.dart';
@@ -166,18 +167,17 @@ class ChatRepository {
   final HttpClient _httpClient;
 
   ChatRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Get conversations for current user
-  Future<ConversationsPage?> getConversations(
-      {int page = 1, int limit = 10}) async {
+  Future<ConversationsPage?> getConversations({
+    int page = 1,
+    int limit = 10,
+  }) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.conversationsEndpoint,
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -198,17 +198,14 @@ class ChatRepository {
     try {
       final response = await _httpClient.post(
         ApiConfig.conversationsEndpoint,
-        body: {
-          'type': type,
-          if (name != null) 'name': name,
-          'participantIds': participantIds,
-        },
+        body: {'type': type, 'name': ?name, 'participantIds': participantIds},
       );
 
       if (response is Map<String, dynamic>) {
         if (response['data'] is Map<String, dynamic>) {
           return Conversation.fromJson(
-              response['data'] as Map<String, dynamic>);
+            response['data'] as Map<String, dynamic>,
+          );
         }
         return Conversation.fromJson(response);
       }
@@ -238,9 +235,7 @@ class ChatRepository {
   /// Delete/leave conversation
   Future<bool> deleteConversation(String conversationId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.conversationById(conversationId),
-      );
+      await _httpClient.delete(ApiConfig.conversationById(conversationId));
       return true;
     } catch (e) {
       debugPrint('ChatRepository: deleteConversation error: $e');
@@ -249,15 +244,15 @@ class ChatRepository {
   }
 
   /// Get messages in conversation
-  Future<MessagesPage?> getMessages(String conversationId,
-      {int page = 1, int limit = 20}) async {
+  Future<MessagesPage?> getMessages(
+    String conversationId, {
+    int page = 1,
+    int limit = 20,
+  }) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.conversationMessages(conversationId),
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -278,10 +273,7 @@ class ChatRepository {
     try {
       final response = await _httpClient.post(
         ApiConfig.sendMessage(conversationId),
-        body: {
-          'content': content,
-          if (imageUrls != null) 'imageUrls': imageUrls,
-        },
+        body: {'content': content, 'imageUrls': ?imageUrls},
       );
 
       if (response is Map<String, dynamic>) {

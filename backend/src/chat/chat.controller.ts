@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
@@ -29,8 +30,8 @@ export class ChatController {
   @ApiOperation({ summary: 'Danh sách cuộc trò chuyện' })
   async getConversations(
     @CurrentUser() user: User,
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.chatService.getConversations(user.id, page, limit);
   }
@@ -50,7 +51,7 @@ export class ChatController {
   @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Chi tiết cuộc trò chuyện' })
   async getConversationById(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
   ) {
     return this.chatService.getConversationById(id, user.id);
@@ -61,7 +62,7 @@ export class ChatController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Xoá cuộc trò chuyện' })
   async deleteConversation(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
   ) {
     return this.chatService.deleteConversation(id, user.id);
@@ -71,10 +72,10 @@ export class ChatController {
   @UseGuards(JwtGuard)
   @ApiOperation({ summary: 'Danh sách tin nhắn' })
   async getMessages(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.chatService.getMessages(id, user.id, page, limit);
   }
@@ -84,7 +85,7 @@ export class ChatController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Gửi tin nhắn' })
   async sendMessage(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
     @Body() sendMessageDto: SendMessageDto,
   ) {

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,10 +17,11 @@ import 'package:mindra/screens/home_shell.dart';
 import 'package:mindra/screens/login_view.dart';
 import 'package:mindra/state/mindra_state.dart';
 
-class TestUser implements User {
+class TestUser implements AuthUser {
   TestUser(this.uid);
-  @override
   final String uid;
+  @override
+  String get id => uid;
   @override
   String get email => '$uid@example.invalid';
   @override
@@ -33,13 +33,15 @@ class TestUser implements User {
 }
 
 class SessionAuth extends AuthRepository {
-  User? user = TestUser('alice');
+  AuthUser? user = TestUser('alice');
   bool failLogout = false;
-  final changes = StreamController<User?>.broadcast(sync: true);
+  final changes = StreamController<AuthUser?>.broadcast(sync: true);
   @override
-  User? get currentUser => user;
+  AuthUser? get currentUser => user;
   @override
-  Stream<User?> get authStateChanges => changes.stream;
+  String? get currentUserId => user?.id;
+  @override
+  Stream<AuthUser?> get authStateChanges => changes.stream;
   void switchTo(String? uid) {
     user = uid == null ? null : TestUser(uid);
     changes.add(user);
@@ -92,6 +94,7 @@ class SessionReflection extends ReflectionRepository {
     required int intensity,
     String? situation,
     String? thought,
+    String? entryId,
   }) => pending.future;
 }
 
@@ -170,7 +173,7 @@ void main() {
   test(
     'SESSION-03 late garden fetch cannot populate the next session',
     () async {
-      final pending = state.syncFromFirestore();
+      final pending = state.syncFromApi();
       await Future<void>.delayed(Duration.zero);
       auth.switchTo('bob');
       auth.switchTo('alice');

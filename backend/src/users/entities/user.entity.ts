@@ -5,12 +5,9 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-  ManyToMany,
-  JoinTable,
 } from 'typeorm';
 import { Post } from '../../posts/entities/post.entity';
 import { Friend } from '../../friends/entities/friend.entity';
-import { Group } from '../../groups/entities/group.entity';
 
 @Entity('users')
 export class User {
@@ -39,7 +36,21 @@ export class User {
   isVerified: boolean;
 
   @Column({ type: 'varchar', nullable: true })
-  refreshTokenHash?: string;
+  refreshTokenHash?: string | null;
+
+  // Tăng khi đăng xuất để mọi access token cũ hết hiệu lực ngay.
+  @Column({ type: 'int', default: 0 })
+  tokenVersion: number;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, unique: true })
+  googleSub?: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, unique: true })
+  appleSub?: string | null;
+
+  // Quyền kiểm duyệt Cộng đồng; chỉ cấp thủ công trong DB.
+  @Column({ type: 'boolean', default: false })
+  communityAdmin: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -53,12 +64,4 @@ export class User {
 
   @OneToMany(() => Friend, (friend) => friend.user)
   friends?: Friend[];
-
-  @ManyToMany(() => Group, (group) => group.members)
-  @JoinTable({
-    name: 'group_members',
-    joinColumn: { name: 'userId', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'groupId', referencedColumnName: 'id' },
-  })
-  groups?: Group[];
 }

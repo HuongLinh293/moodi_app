@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import 'user_repository.dart';
@@ -127,17 +128,14 @@ class FriendRepository {
   final HttpClient _httpClient;
 
   FriendRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Get friends list
   Future<FriendsPage?> getFriends({int page = 1, int limit = 10}) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.friendsEndpoint,
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -164,15 +162,14 @@ class FriendRepository {
   }
 
   /// Get pending friend requests
-  Future<FriendRequestsPage?> getFriendRequests(
-      {int page = 1, int limit = 10}) async {
+  Future<FriendRequestsPage?> getFriendRequests({
+    int page = 1,
+    int limit = 10,
+  }) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.friendRequestsEndpoint,
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -201,9 +198,7 @@ class FriendRepository {
   /// Reject friend request
   Future<bool> rejectFriendRequest(String requestId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.rejectFriendRequest(requestId),
-      );
+      await _httpClient.delete(ApiConfig.rejectFriendRequest(requestId));
       return true;
     } catch (e) {
       debugPrint('FriendRepository: rejectFriendRequest error: $e');
@@ -214,9 +209,7 @@ class FriendRepository {
   /// Remove friend
   Future<bool> removeFriend(String friendId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.removeFriend(friendId),
-      );
+      await _httpClient.delete(ApiConfig.removeFriend(friendId));
       return true;
     } catch (e) {
       debugPrint('FriendRepository: removeFriend error: $e');

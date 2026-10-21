@@ -13,6 +13,7 @@ import { User } from '../users/entities/user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { pageParams } from '../common/pagination';
 
 @Injectable()
 export class GroupsService {
@@ -28,8 +29,8 @@ export class GroupsService {
   ) {}
 
   // Get all groups for a user
-  async getGroups(userId: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+  async getGroups(userId: string, pageQuery?: unknown, limitQuery?: unknown) {
+    const { page, limit, skip } = pageParams(pageQuery, limitQuery);
 
     const [groups, total] = await this.groupMembersRepository.findAndCount({
       where: { userId },
@@ -80,7 +81,7 @@ export class GroupsService {
   }
 
   // Get group details
-  async getGroupById(id: string, userId?: string) {
+  async getGroupById(id: string, userId: string) {
     const group = await this.groupsRepository.findOne({
       where: { id },
       relations: ['createdBy'],
@@ -98,9 +99,7 @@ export class GroupsService {
     return {
       ...this.formatGroupResponse(group),
       memberCount,
-      isMember: userId
-        ? await this.isGroupMember(id, userId)
-        : false,
+      isMember: await this.isGroupMember(id, userId),
     };
   }
 
@@ -154,11 +153,20 @@ export class GroupsService {
   }
 
   // Get group members
-  async getGroupMembers(groupId: string, page = 1, limit = 10) {
+  async getGroupMembers(
+    groupId: string,
+    userId: string,
+    pageQuery?: unknown,
+    limitQuery?: unknown,
+  ) {
     // Check if group exists
-    await this.getGroupById(groupId);
+    await this.getGroupById(groupId, userId);
+    // Danh sách thành viên là thông tin riêng của nhóm.
+    if (!(await this.isGroupMember(groupId, userId))) {
+      throw new ForbiddenException('Chỉ thành viên mới xem được danh sách này');
+    }
 
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = pageParams(pageQuery, limitQuery);
     const [members, total] = await this.groupMembersRepository.findAndCount({
       where: { groupId },
       relations: ['user'],

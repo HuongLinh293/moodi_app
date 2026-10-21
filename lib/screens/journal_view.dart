@@ -1,5 +1,5 @@
-import '../widgets/entry_sync_notice.dart';
 import '../core/garden_actions.dart';
+import '../widgets/entry_sync_notice.dart';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -160,7 +160,9 @@ class _JournalViewState extends State<JournalView> {
               ),
               child: SafeArea(
                 top: false,
-                child: Column(
+                child: GestureDetector(
+                  onTap: () => FocusScope.of(modalContext).unfocus(),
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -465,6 +467,7 @@ class _JournalViewState extends State<JournalView> {
                       ),
                     ],
                   ],
+                ),
                 ),
               ),
             );
@@ -1319,7 +1322,9 @@ class _JournalViewState extends State<JournalView> {
       'uncertainty': 'Chưa rõ',
     };
 
-    return Column(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Search bar
@@ -1660,6 +1665,7 @@ class _JournalViewState extends State<JournalView> {
             },
           ),
       ],
+    ),
     );
   }
 

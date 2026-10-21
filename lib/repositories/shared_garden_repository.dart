@@ -1,5 +1,5 @@
-import 'dart:math';
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import '../models/shared_garden.dart';
@@ -9,7 +9,7 @@ class SharedGardenRepository {
   String? _currentUserId;
 
   SharedGardenRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Set the current user ID for API calls
   void setCurrentUserId(String userId) {
@@ -22,18 +22,6 @@ class SharedGardenRepository {
       throw StateError('Hãy đăng nhập để sử dụng vườn chung.');
     }
     return _currentUserId!;
-  }
-
-  /// Generate a unique garden code
-  String _generateCode() {
-    final random = Random.secure();
-    return 'MD-${List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join().toUpperCase()}';
-  }
-
-  /// Sanitize garden name
-  String _sanitizeName(String name) {
-    final trimmed = name.trim();
-    return trimmed.isEmpty ? 'Bạn đồng hành' : trimmed.substring(0, min(trimmed.length, 80));
   }
 
   /// Create a new shared garden
@@ -57,7 +45,10 @@ class SharedGardenRepository {
       );
 
       if (response is Map<String, dynamic>) {
-        return SharedGarden.fromFirestore(response, response['id'] as String? ?? '');
+        return SharedGarden.fromFirestore(
+          response,
+          response['id'] as String? ?? '',
+        );
       }
 
       throw StateError('Invalid response from server');
@@ -81,20 +72,21 @@ class SharedGardenRepository {
       final cleanCode = code.trim().toUpperCase();
 
       if (!RegExp(r'^MD-[A-F0-9]{32}$').hasMatch(cleanCode)) {
-        throw StateError('Mã mời đã cũ hoặc không hợp lệ. Hãy nhờ bạn gửi mã mới.');
+        throw StateError(
+          'Mã mời đã cũ hoặc không hợp lệ. Hãy nhờ bạn gửi mã mới.',
+        );
       }
 
       final response = await _httpClient.post(
         '${ApiConfig.sharedGardenEndpoint}/join',
-        body: {
-          'code': cleanCode,
-          'userId': userId,
-          'userName': userName,
-        },
+        body: {'code': cleanCode, 'userId': userId, 'userName': userName},
       );
 
       if (response is Map<String, dynamic>) {
-        return SharedGarden.fromFirestore(response, response['id'] as String? ?? '');
+        return SharedGarden.fromFirestore(
+          response,
+          response['id'] as String? ?? '',
+        );
       }
 
       return null;
@@ -108,84 +100,85 @@ class SharedGardenRepository {
   Stream<SharedGarden?> watchUserGarden(String userId) {
     const pollInterval = Duration(seconds: 5);
 
-    return Stream.periodic(
-      pollInterval,
-      (_) async {
-        try {
-          final response = await _httpClient.get(
-            '${ApiConfig.sharedGardenEndpoint}/user-garden',
-            queryParameters: {'userId': userId},
-          );
+    return Stream.periodic(pollInterval, (_) async {
+      try {
+        final response = await _httpClient.get(
+          '${ApiConfig.sharedGardenEndpoint}/user-garden',
+          queryParameters: {'userId': userId},
+        );
 
-          if (response is Map<String, dynamic> && response['id'] != null) {
-            return SharedGarden.fromFirestore(response, response['id'] as String);
-          }
-          return null;
-        } catch (e) {
-          debugPrint('SharedGardenRepository: Error watching user garden: $e');
-          return null;
+        if (response is Map<String, dynamic> && response['id'] != null) {
+          return SharedGarden.fromFirestore(response, response['id'] as String);
         }
-      },
-    ).asyncExpand((future) => future.asStream());
+        return null;
+      } catch (e) {
+        debugPrint('SharedGardenRepository: Error watching user garden: $e');
+        rethrow;
+      }
+    }).asyncExpand((future) => future.asStream());
   }
 
   /// Watch specific shared garden
   Stream<SharedGarden?> watchGarden(String gardenId) {
     const pollInterval = Duration(seconds: 5);
 
-    return Stream.periodic(
-      pollInterval,
-      (_) async {
-        try {
-          final response = await _httpClient.get(
-            '${ApiConfig.sharedGardenEndpoint}/$gardenId',
-          );
+    return Stream.periodic(pollInterval, (_) async {
+      try {
+        final response = await _httpClient.get(
+          '${ApiConfig.sharedGardenEndpoint}/$gardenId',
+        );
 
-          if (response is Map<String, dynamic>) {
-            return SharedGarden.fromFirestore(response, gardenId);
-          }
-          return null;
-        } catch (e) {
-          debugPrint('SharedGardenRepository: Error watching garden: $e');
-          return null;
+        if (response is Map<String, dynamic>) {
+          return SharedGarden.fromFirestore(response, gardenId);
         }
-      },
-    ).asyncExpand((future) => future.asStream());
+        return null;
+      } catch (e) {
+        debugPrint('SharedGardenRepository: Error watching garden: $e');
+        rethrow;
+      }
+    }).asyncExpand((future) => future.asStream());
   }
 
   /// Watch moments in a shared garden (polling)
   Stream<List<SharedMoment>> watchMoments(String gardenId) {
     const pollInterval = Duration(seconds: 5);
 
-    return Stream.periodic(
-      pollInterval,
-      (_) async {
-        try {
-          final response = await _httpClient.get(
-            '${ApiConfig.sharedGardenEndpoint}/$gardenId/moments',
-          );
+    return Stream.periodic(pollInterval, (_) async {
+      try {
+        final response = await _httpClient.get(
+          '${ApiConfig.sharedGardenEndpoint}/$gardenId/moments',
+        );
 
-          if (response is List) {
-            return response
+        if (response is List) {
+          return response
+              .whereType<Map<String, dynamic>>()
+              .map(
+                (data) => SharedMoment.fromFirestore(
+                  data,
+                  data['id'] as String? ?? '',
+                ),
+              )
+              .toList();
+        } else if (response is Map<String, dynamic>) {
+          final data = response['moments'] ?? response['data'] ?? [];
+          if (data is List) {
+            return data
                 .whereType<Map<String, dynamic>>()
-                .map((data) => SharedMoment.fromFirestore(data, data['id'] as String? ?? ''))
+                .map(
+                  (moment) => SharedMoment.fromFirestore(
+                    moment,
+                    moment['id'] as String? ?? '',
+                  ),
+                )
                 .toList();
-          } else if (response is Map<String, dynamic>) {
-            final data = response['moments'] ?? response['data'] ?? [];
-            if (data is List) {
-              return data
-                  .whereType<Map<String, dynamic>>()
-                  .map((moment) => SharedMoment.fromFirestore(moment, moment['id'] as String? ?? ''))
-                  .toList();
-            }
           }
-          return [];
-        } catch (e) {
-          debugPrint('SharedGardenRepository: Error watching moments: $e');
-          return [];
         }
-      },
-    ).asyncExpand((future) => future.asStream());
+        return <SharedMoment>[];
+      } catch (e) {
+        debugPrint('SharedGardenRepository: Error watching moments: $e');
+        rethrow;
+      }
+    }).asyncExpand((future) => future.asStream());
   }
 
   /// Plant a journal entry in the shared garden
@@ -197,14 +190,14 @@ class SharedGardenRepository {
     try {
       final response = await _httpClient.post(
         '${ApiConfig.sharedGardenEndpoint}/$gardenId/plant',
-        body: {
-          'entryId': entryId,
-          'includeCaption': includeCaption,
-        },
+        body: {'entryId': entryId, 'includeCaption': includeCaption},
       );
 
       if (response is Map<String, dynamic>) {
-        return SharedMoment.fromFirestore(response, response['id'] as String? ?? '');
+        return SharedMoment.fromFirestore(
+          response,
+          response['id'] as String? ?? '',
+        );
       }
 
       throw StateError('Invalid response from server');
@@ -280,10 +273,7 @@ class SharedGardenRepository {
     try {
       final response = await _httpClient.post(
         '${ApiConfig.sharedGardenEndpoint}/$gardenId/moments/$momentId/interact',
-        body: {
-          'isWater': isWater,
-          'interactorName': interactorName,
-        },
+        body: {'isWater': isWater, 'interactorName': interactorName},
       );
 
       if (response is Map<String, dynamic>) {
@@ -311,7 +301,7 @@ class SharedGardenRepository {
       return null;
     } catch (e) {
       debugPrint('SharedGardenRepository: Error getting garden: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -330,7 +320,7 @@ class SharedGardenRepository {
       return null;
     } catch (e) {
       debugPrint('SharedGardenRepository: Error getting user garden: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -344,21 +334,29 @@ class SharedGardenRepository {
       if (response is List) {
         return response
             .whereType<Map<String, dynamic>>()
-            .map((data) => SharedMoment.fromFirestore(data, data['id'] as String? ?? ''))
+            .map(
+              (data) =>
+                  SharedMoment.fromFirestore(data, data['id'] as String? ?? ''),
+            )
             .toList();
       } else if (response is Map<String, dynamic>) {
         final data = response['moments'] ?? response['data'] ?? [];
         if (data is List) {
           return data
               .whereType<Map<String, dynamic>>()
-              .map((moment) => SharedMoment.fromFirestore(moment, moment['id'] as String? ?? ''))
+              .map(
+                (moment) => SharedMoment.fromFirestore(
+                  moment,
+                  moment['id'] as String? ?? '',
+                ),
+              )
               .toList();
         }
       }
-      return [];
+      return <SharedMoment>[];
     } catch (e) {
       debugPrint('SharedGardenRepository: Error getting moments: $e');
-      return [];
+      rethrow;
     }
   }
 

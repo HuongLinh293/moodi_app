@@ -8,13 +8,29 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { StorageFile } from './entities/storage-file.entity';
 import { User } from '../users/entities/user.entity';
 import { UploadFileDto } from './dto/upload-file.dto';
+import { pageParams } from '../common/pagination';
+
+// Chỉ nhận định dạng có chữ ký nhận diện được; mimeType do client khai báo
+// phải khớp với nội dung thật.
+const SIGNATURES: Record<string, (b: Buffer) => boolean> = {
+  'image/jpeg': (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  'image/png': (b) =>
+    b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  'image/gif': (b) => b.subarray(0, 6).toString('ascii').startsWith('GIF8'),
+  'image/webp': (b) =>
+    b.subarray(0, 4).toString('ascii') === 'RIFF' && b.subarray(8, 12).toString('ascii') === 'WEBP',
+  'application/pdf': (b) => b.subarray(0, 5).toString('ascii') === '%PDF-',
+};
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 @Injectable()
 export class StorageService {
-  private uploadDir = path.join(process.cwd(), 'uploads');
+  private uploadDir = path.resolve(process.env.UPLOAD_FOLDER || path.join(process.cwd(), 'uploads'));
+  private maxSize = parseInt(process.env.MAX_FILE_SIZE || `${10 * 1024 * 1024}`, 10);
 
   constructor(
     @InjectRepository(StorageFile)
@@ -35,40 +51,36 @@ export class StorageService {
       throw new NotFoundException('Người dùng không tồn tại');
     }
 
-    // Decode base64 content
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(uploadFileDto.fileContent, 'base64');
-    } catch (error) {
+    if (!BASE64.test(uploadFileDto.fileContent)) {
       throw new BadRequestException('Nội dung file không hợp lệ');
     }
-
-    // Validate file size (max 50MB)
-    const maxSize = 50 * 1024 * 1024;
-    if (buffer.length > maxSize) {
-      throw new BadRequestException('File quá lớn, tối đa 50MB');
+    const buffer = Buffer.from(uploadFileDto.fileContent, 'base64');
+    if (buffer.length === 0 || buffer.length > this.maxSize) {
+      throw new BadRequestException(
+        `File trống hoặc quá lớn (tối đa ${Math.floor(this.maxSize / 1024 / 1024)}MB)`,
+      );
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const randomStr = Math.random().toString(36).substring(7);
-    const filename = `${timestamp}-${randomStr}-${uploadFileDto.filename}`;
-    const filePath = path.join(this.uploadDir, filename);
+    const mimeType = uploadFileDto.mimeType;
+    const matches = SIGNATURES[mimeType];
+    if (!matches || !matches(buffer)) {
+      throw new BadRequestException('Định dạng file không được hỗ trợ hoặc không khớp nội dung');
+    }
 
-    // Save file to disk
+    // Tên trên đĩa do server sinh; tên gốc chỉ lưu làm nhãn hiển thị.
+    const diskName = randomUUID();
     try {
-      fs.writeFileSync(filePath, buffer);
+      fs.writeFileSync(path.join(this.uploadDir, diskName), buffer, { flag: 'wx' });
     } catch (error) {
       throw new BadRequestException('Lỗi khi lưu file');
     }
 
-    // Create database record
     const storageFile = this.storageFilesRepository.create({
       uploadedById: userId,
-      filename: uploadFileDto.filename,
-      filePath: `/uploads/${filename}`,
+      filename: this.displayName(uploadFileDto.filename),
+      filePath: `/uploads/${diskName}`,
       fileSize: buffer.length,
-      mimeType: uploadFileDto.mimeType || 'application/octet-stream',
+      mimeType,
       accessType: uploadFileDto.accessType || 'private',
       relatedEntityType: uploadFileDto.relatedEntityType,
       relatedEntityId: uploadFileDto.relatedEntityId,
@@ -84,29 +96,14 @@ export class StorageService {
 
   // Get file by ID
   async getFile(id: string, userId?: string) {
-    const file = await this.storageFilesRepository.findOne({
-      where: { id },
-      relations: ['uploadedBy'],
-    });
-
-    if (!file) {
-      throw new NotFoundException('File không tồn tại');
-    }
-
-    // Check access permission
-    if (file.accessType === 'private' && file.uploadedById !== userId) {
-      throw new ForbiddenException('Bạn không có quyền truy cập file này');
-    }
-
-    return this.formatFileResponse(file);
+    return this.formatFileResponse(await this.findAccessible(id, userId));
   }
 
   // Get file content (for download/display)
   async getFileContent(id: string, userId?: string) {
-    const file = await this.getFile(id, userId);
+    const file = await this.findAccessible(id, userId);
+    const filePath = this.diskPath(file);
 
-    // Check if file exists on disk
-    const filePath = path.join(process.cwd(), file.filePath);
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('File không tồn tại trên server');
     }
@@ -136,8 +133,7 @@ export class StorageService {
       );
     }
 
-    // Delete from disk
-    const filePath = path.join(process.cwd(), file.filePath);
+    const filePath = this.diskPath(file);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
@@ -151,23 +147,23 @@ export class StorageService {
   }
 
   // Get user's files
-  async getUserFiles(userId: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+  async getUserFiles(userId: string, page?: unknown, limit?: unknown) {
+    const params = pageParams(page, limit);
 
     const [files, total] = await this.storageFilesRepository.findAndCount({
       where: { uploadedById: userId },
-      skip,
-      take: limit,
+      skip: params.skip,
+      take: params.limit,
       order: { createdAt: 'DESC' },
     });
 
     return {
       data: files.map((f) => this.formatFileResponse(f)),
       pagination: {
-        page,
-        limit,
+        page: params.page,
+        limit: params.limit,
         total,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(total / params.limit),
       },
     };
   }
@@ -184,6 +180,7 @@ export class StorageService {
         relatedEntityId,
       },
       order: { createdAt: 'DESC' },
+      take: 50,
     });
 
     // Filter based on access permissions
@@ -198,12 +195,38 @@ export class StorageService {
     };
   }
 
+  private async findAccessible(id: string, userId?: string): Promise<StorageFile> {
+    const file = await this.storageFilesRepository.findOne({ where: { id } });
+
+    // Không phân biệt "không tồn tại" và "không có quyền" để tránh dò id file private.
+    if (!file || (file.accessType === 'private' && file.uploadedById !== userId)) {
+      throw new NotFoundException('File không tồn tại');
+    }
+
+    return file;
+  }
+
+  // Bản ghi cũ có thể chứa tên do client đặt; luôn ép đường dẫn nằm trong uploadDir.
+  private diskPath(file: StorageFile): string {
+    const resolved = path.resolve(this.uploadDir, path.basename(file.filePath));
+    if (path.dirname(resolved) !== this.uploadDir) {
+      throw new NotFoundException('File không tồn tại trên server');
+    }
+    return resolved;
+  }
+
+  private displayName(filename: string): string {
+    const base = path.basename(filename.replace(/\\/g, '/'));
+    const clean = base.replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 120);
+    return clean || 'file';
+  }
+
   // Helper methods
   private formatFileResponse(file: StorageFile) {
     return {
       id: file.id,
       filename: file.filename,
-      filePath: file.filePath,
+      contentUrl: `/api/storage/${file.id}/content`,
       fileSize: file.fileSize,
       mimeType: file.mimeType,
       accessType: file.accessType,

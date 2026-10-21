@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 
@@ -33,7 +33,8 @@ class StorageFile {
     return StorageFile(
       id: json['id'] as String? ?? '',
       filename: json['filename'] as String? ?? '',
-      filePath: json['filePath'] as String? ?? '',
+      // Server không lộ đường dẫn trên đĩa; chỉ trả URL đọc qua API có kiểm tra quyền.
+      filePath: (json['contentUrl'] ?? json['filePath']) as String? ?? '',
       fileSize: json['fileSize'] as int? ?? 0,
       mimeType: json['mimeType'] as String?,
       accessType: json['accessType'] as String? ?? 'private',
@@ -95,13 +96,14 @@ class StorageRepository {
   final HttpClient _httpClient;
 
   StorageRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Upload file (from Uint8List or String path)
   Future<StorageFile?> uploadFile({
     required String filename,
     required String fileContent, // base64 encoded content
-    String? mimeType,
+    // Bắt buộc: server đối chiếu với chữ ký (magic bytes) của nội dung.
+    required String mimeType,
     String accessType = 'private',
     String? relatedEntityType,
     String? relatedEntityId,
@@ -112,10 +114,10 @@ class StorageRepository {
         body: {
           'filename': filename,
           'fileContent': fileContent, // already base64 encoded
-          if (mimeType != null) 'mimeType': mimeType,
+          'mimeType': mimeType,
           'accessType': accessType,
-          if (relatedEntityType != null) 'relatedEntityType': relatedEntityType,
-          if (relatedEntityId != null) 'relatedEntityId': relatedEntityId,
+          'relatedEntityType': ?relatedEntityType,
+          'relatedEntityId': ?relatedEntityId,
         },
       );
 
@@ -135,9 +137,7 @@ class StorageRepository {
   /// Get file metadata
   Future<StorageFile?> getFileById(String fileId) async {
     try {
-      final response = await _httpClient.get(
-        ApiConfig.storageFile(fileId),
-      );
+      final response = await _httpClient.get(ApiConfig.storageFile(fileId));
 
       if (response is Map<String, dynamic>) {
         return StorageFile.fromJson(response);
@@ -151,9 +151,7 @@ class StorageRepository {
   /// Download file (returns base64 encoded content)
   Future<String?> downloadFile(String fileId) async {
     try {
-      final response = await _httpClient.get(
-        ApiConfig.downloadFile(fileId),
-      );
+      final response = await _httpClient.get(ApiConfig.downloadFile(fileId));
 
       if (response is Map<String, dynamic>) {
         return response['content'] as String?;
@@ -167,9 +165,7 @@ class StorageRepository {
   /// Delete file
   Future<bool> deleteFile(String fileId) async {
     try {
-      await _httpClient.delete(
-        ApiConfig.storageFile(fileId),
-      );
+      await _httpClient.delete(ApiConfig.storageFile(fileId));
       return true;
     } catch (e) {
       debugPrint('StorageRepository: deleteFile error: $e');
@@ -182,10 +178,7 @@ class StorageRepository {
     try {
       final response = await _httpClient.get(
         ApiConfig.storageEndpoint,
-        queryParameters: {
-          'page': page.toString(),
-          'limit': limit.toString(),
-        },
+        queryParameters: {'page': page.toString(), 'limit': limit.toString()},
       );
 
       if (response is Map<String, dynamic>) {
@@ -199,7 +192,9 @@ class StorageRepository {
 
   /// Get files for related entity (post, group, etc.)
   Future<List<StorageFile>> getFilesByEntity(
-      String entityType, String entityId) async {
+    String entityType,
+    String entityId,
+  ) async {
     try {
       final response = await _httpClient.get(
         ApiConfig.filesByEntity(entityType, entityId),

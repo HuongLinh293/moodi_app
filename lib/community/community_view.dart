@@ -103,6 +103,69 @@ class _CommunityViewState extends State<CommunityView> {
     load();
   }
 
+  Widget _emptyActions() {
+    return Column(
+      children: [
+        FilledButton(
+          onPressed: () async {
+            await communityPush(
+              context,
+              CommunityComposer(
+                repo: repo,
+                destination: 'Cộng đồng chung',
+                scope: const {'space': 'public'},
+              ),
+            );
+            load();
+          },
+          child: const Text('Viết một chia sẻ'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: () =>
+              communityPush(context, CommunityPeoplePage(repo: repo)),
+          child: const Text('Tìm người đồng cảm'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: _createGroup,
+          child: const Text('Tạo nhóm riêng'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _createGroup() async {
+    final requestId = repo.newRequestId();
+    String? groupId;
+    var name = '';
+    await communityPush(
+      context,
+      CommunityForm(
+        title: 'Tạo nhóm riêng',
+        button: 'Tạo nhóm',
+        description: 'Chỉ người được mời mới vào được. Nhật ký riêng không đưa vào nhóm.',
+        fields: const [
+          (key: 'name', label: 'Tên nhóm', max: 60, initial: ''),
+          (key: 'description', label: 'Vài dòng về nhóm', max: 240, initial: ''),
+        ],
+        submit: (values) async {
+          name = values['name'] ?? '';
+          groupId = (await repo.mutate(
+            'createGroup',
+            values,
+            requestId: requestId,
+          ))['id'];
+        },
+      ),
+    );
+    if (!mounted || groupId == null) return;
+    await communityPush(
+      context,
+      CommunityGroupPage(repo: repo, space: groupId!, name: name),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (error != null) {
@@ -247,7 +310,7 @@ class _CommunityViewState extends State<CommunityView> {
           child: Stack(
             children: [
               section == 0
-                  ? CommunityFeed(repo: repo)
+                  ? CommunityFeed(repo: repo, emptyAction: _emptyActions())
                   : CommunityGroups(repo: repo),
               // FAB for quick compose — always accessible while scrolling
               if (section == 0)

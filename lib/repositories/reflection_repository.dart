@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../core/http_client.dart';
 import '../core/api_config.dart';
 import '../models/ai_reflection.dart';
@@ -7,7 +8,7 @@ class ReflectionRepository {
   final HttpClient _httpClient;
 
   ReflectionRepository({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+    : _httpClient = httpClient ?? HttpClient();
 
   /// Generate AI reflection based on emotion and context
   Future<AIReflection> generateReflection({
@@ -15,27 +16,32 @@ class ReflectionRepository {
     required int intensity,
     String? situation,
     String? thought,
+    String? entryId,
   }) async {
     try {
       final response = await _httpClient.post(
         ApiConfig.generateReflectionEndpoint,
+        timeout: const Duration(seconds: 55),
         body: {
           'emotionKey': emotionKey,
           'intensity': intensity,
           'situation': situation ?? '',
           'thought': thought ?? '',
+          'entryId': ?entryId,
         },
       );
 
       if (response is Map<String, dynamic>) {
         final reflection = AIReflection.fromJson(response);
         debugPrint(
-            'ReflectionRepository: Successfully generated reflection from API');
+          'ReflectionRepository: Successfully generated reflection from API',
+        );
         return reflection;
       }
     } catch (e) {
       debugPrint(
-          'ReflectionRepository: API call failed ($e), falling back to local model');
+        'ReflectionRepository: API call failed ($e), falling back to local model',
+      );
     }
 
     // Fallback to local CBT reflection model if API fails
@@ -53,9 +59,7 @@ class ReflectionRepository {
     int limit = 10,
   }) async {
     try {
-      final queryParams = <String, String>{
-        'limit': limit.toString(),
-      };
+      final queryParams = <String, String>{'limit': limit.toString()};
 
       if (userId != null) {
         queryParams['userId'] = userId;
@@ -96,10 +100,7 @@ class ReflectionRepository {
     try {
       await _httpClient.post(
         '${ApiConfig.reflectionEndpoint}/$reflectionId/feedback',
-        body: {
-          'feedback': feedback,
-          'helpful': helpful,
-        },
+        body: {'feedback': feedback, 'helpful': helpful},
       );
 
       debugPrint('ReflectionRepository: Feedback saved successfully');
@@ -117,10 +118,7 @@ class ReflectionRepository {
     try {
       final response = await _httpClient.post(
         '${ApiConfig.reflectionEndpoint}/exercise',
-        body: {
-          'emotionKey': emotionKey,
-          'intensity': intensity,
-        },
+        body: {'emotionKey': emotionKey, 'intensity': intensity},
       );
 
       if (response is Map<String, dynamic>) {
@@ -141,10 +139,7 @@ class ReflectionRepository {
     try {
       final response = await _httpClient.post(
         '${ApiConfig.reflectionEndpoint}/safety-check',
-        body: {
-          'situation': situation,
-          'thought': thought,
-        },
+        body: {'situation': situation, 'thought': thought},
       );
 
       if (response is Map<String, dynamic>) {
@@ -153,8 +148,8 @@ class ReflectionRepository {
       return true;
     } catch (e) {
       debugPrint('ReflectionRepository: Error checking safety: $e');
-      // Default to safe if API check fails
-      return true;
+      // Không xác nhận được thì không coi là an toàn.
+      return false;
     }
   }
 

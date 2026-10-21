@@ -83,4 +83,3 @@ class MicroGoal {
     return MicroGoal.fromFirestore(json, id ?? json['id'] as String? ?? '');
   }
 }
-

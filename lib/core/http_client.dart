@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import 'api_config.dart';
 
 /// Custom exception for API errors
@@ -9,16 +11,30 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
   final String? response;
+  final String? _code;
+  String get code =>
+      _code ??
+      switch (statusCode) {
+        401 => 'unauthenticated',
+        403 => 'permission-denied',
+        404 => 'not-found',
+        408 => 'deadline-exceeded',
+        409 => 'failed-precondition',
+        429 => 'resource-exhausted',
+        501 => 'unimplemented',
+        500 => 'internal',
+        _ => 'unavailable',
+      };
 
   ApiException({
     required this.message,
     this.statusCode,
     this.response,
+    this._code,
   });
 
   @override
-  String toString() =>
-      'ApiException: $message (Status: $statusCode) - Response: $response';
+  String toString() => 'ApiException: $message (Status: $statusCode)';
 }
 
 /// HTTP client for making API requests
@@ -27,11 +43,12 @@ class HttpClient {
 
   late http.Client _httpClient;
   String? _authToken;
-  String? _refreshToken;
 
   HttpClient._internal() {
     _httpClient = http.Client();
   }
+
+  HttpClient.withClient(http.Client client) : _httpClient = client;
 
   factory HttpClient() {
     return _instance;
@@ -44,13 +61,12 @@ class HttpClient {
 
   /// Set refresh token
   void setRefreshToken(String token) {
-    _refreshToken = token;
+    // Refresh tokens are owned by AuthRepository.
   }
 
   /// Clear authentication tokens
   void clearAuthTokens() {
     _authToken = null;
-    _refreshToken = null;
   }
 
   /// Get current auth token
@@ -85,14 +101,22 @@ class HttpClient {
   }
 
   /// Handle response errors
-  void _handleErrorResponse(http.Response response) {
+  Never _handleErrorResponse(http.Response response) {
     String errorMessage = 'Request failed with status ${response.statusCode}';
+    String? code;
 
     try {
       final data = jsonDecode(response.body);
-      if (data is Map && data.containsKey('message')) {
-        errorMessage = data['message'] as String;
-      } else if (data is Map && data.containsKey('error')) {
+      final message = data is Map ? data['message'] : null;
+      if (message is String) {
+        errorMessage = message;
+      } else if (message is List && message.isNotEmpty) {
+        // ValidationPipe của NestJS trả mảng lỗi.
+        errorMessage = message.join('; ');
+      }
+      // Mã lỗi nghiệp vụ (vd: already-exists) chính xác hơn suy từ status.
+      if (data is Map && data['code'] is String) code = data['code'] as String;
+      if (message == null && data is Map && data.containsKey('error')) {
         errorMessage = data['error'] as String;
       }
     } catch (e) {
@@ -103,7 +127,75 @@ class HttpClient {
       message: errorMessage,
       statusCode: response.statusCode,
       response: response.body,
+      code: code,
     );
+  }
+
+  /// Gọi khi một request bị 401: trả true nếu đã có access token mới để thử lại.
+  /// AuthRepository gắn hàm refresh token vào đây.
+  Future<bool> Function()? onUnauthorized;
+  Future<bool>? _refreshing;
+
+  Future<dynamic> _send(
+    String method,
+    String endpoint, {
+    Object? body,
+    Map<String, String>? headers,
+    Map<String, String>? queryParameters,
+    bool retried = false,
+    Duration? timeout,
+  }) async {
+    final http.Response response;
+    try {
+      final uri = Uri.parse(
+        '${ApiConfig.apiEndpoint}$endpoint${queryParameters != null ? '?${Uri(queryParameters: queryParameters).query}' : ''}',
+      );
+
+      debugPrint('HttpClient: $method $uri');
+
+      final request = http.Request(method, uri)
+        ..headers.addAll(_buildHeaders(additional: headers));
+      if (body != null) request.body = jsonEncode(body);
+
+      response = await _httpClient
+          .send(request)
+          .then(http.Response.fromStream)
+          .timeout(
+            timeout ?? const Duration(seconds: ApiConfig.requestTimeoutSeconds),
+            onTimeout: () =>
+                throw ApiException(message: 'Request timeout', statusCode: 408),
+          );
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      debugPrint('HttpClient: $method error: $e');
+      throw ApiException(message: 'Failed to complete $method request: $e');
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return _parseResponse(response.body);
+    }
+
+    // Access token hết hạn: refresh một lần (dùng chung cho các request song
+    // song) rồi thử lại. Không áp dụng cho chính các route /auth.
+    if (response.statusCode == 401 &&
+        !retried &&
+        onUnauthorized != null &&
+        !endpoint.startsWith(ApiConfig.authEndpoint)) {
+      _refreshing ??= onUnauthorized!().whenComplete(() => _refreshing = null);
+      if (await _refreshing!) {
+        return _send(
+          method,
+          endpoint,
+          body: body,
+          headers: headers,
+          queryParameters: queryParameters,
+          retried: true,
+          timeout: timeout,
+        );
+      }
+    }
+    _handleErrorResponse(response);
   }
 
   /// Perform GET request
@@ -111,189 +203,38 @@ class HttpClient {
     String endpoint, {
     Map<String, String>? headers,
     Map<String, String>? queryParameters,
-  }) async {
-    try {
-      final uri = Uri.parse(
-        '${ApiConfig.apiEndpoint}$endpoint${queryParameters != null ? '?${Uri(queryParameters: queryParameters).query}' : ''}',
-      );
-
-      debugPrint('HttpClient: GET $uri');
-
-      final response = await _httpClient
-          .get(
-            uri,
-            headers: _buildHeaders(additional: headers),
-          )
-          .timeout(
-            const Duration(seconds: ApiConfig.requestTimeoutSeconds),
-            onTimeout: () => throw ApiException(
-              message: 'Request timeout',
-              statusCode: 408,
-            ),
-          );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return _parseResponse(response.body);
-      } else {
-        _handleErrorResponse(response);
-      }
-    } on ApiException {
-      rethrow;
-    } catch (e) {
-      debugPrint('HttpClient: GET error: $e');
-      throw ApiException(message: 'Failed to complete GET request: $e');
-    }
-  }
+  }) => _send(
+    'GET',
+    endpoint,
+    headers: headers,
+    queryParameters: queryParameters,
+  );
 
   /// Perform POST request
   Future<dynamic> post(
     String endpoint, {
     required Map<String, dynamic> body,
     Map<String, String>? headers,
-  }) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.apiEndpoint}$endpoint');
-
-      debugPrint('HttpClient: POST $uri - Body: $body');
-
-      final response = await _httpClient
-          .post(
-            uri,
-            headers: _buildHeaders(additional: headers),
-            body: jsonEncode(body),
-          )
-          .timeout(
-            const Duration(seconds: ApiConfig.requestTimeoutSeconds),
-            onTimeout: () => throw ApiException(
-              message: 'Request timeout',
-              statusCode: 408,
-            ),
-          );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return _parseResponse(response.body);
-      } else {
-        _handleErrorResponse(response);
-      }
-    } on ApiException {
-      rethrow;
-    } catch (e) {
-      debugPrint('HttpClient: POST error: $e');
-      throw ApiException(message: 'Failed to complete POST request: $e');
-    }
-  }
+    Duration? timeout,
+  }) => _send('POST', endpoint, body: body, headers: headers, timeout: timeout);
 
   /// Perform PUT request
   Future<dynamic> put(
     String endpoint, {
     required Map<String, dynamic> body,
     Map<String, String>? headers,
-  }) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.apiEndpoint}$endpoint');
-
-      debugPrint('HttpClient: PUT $uri - Body: $body');
-
-      final response = await _httpClient
-          .put(
-            uri,
-            headers: _buildHeaders(additional: headers),
-            body: jsonEncode(body),
-          )
-          .timeout(
-            const Duration(seconds: ApiConfig.requestTimeoutSeconds),
-            onTimeout: () => throw ApiException(
-              message: 'Request timeout',
-              statusCode: 408,
-            ),
-          );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return _parseResponse(response.body);
-      } else {
-        _handleErrorResponse(response);
-      }
-    } on ApiException {
-      rethrow;
-    } catch (e) {
-      debugPrint('HttpClient: PUT error: $e');
-      throw ApiException(message: 'Failed to complete PUT request: $e');
-    }
-  }
+  }) => _send('PUT', endpoint, body: body, headers: headers);
 
   /// Perform PATCH request
   Future<dynamic> patch(
     String endpoint, {
     required Map<String, dynamic> body,
     Map<String, String>? headers,
-  }) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.apiEndpoint}$endpoint');
-
-      debugPrint('HttpClient: PATCH $uri - Body: $body');
-
-      final response = await _httpClient
-          .patch(
-            uri,
-            headers: _buildHeaders(additional: headers),
-            body: jsonEncode(body),
-          )
-          .timeout(
-            const Duration(seconds: ApiConfig.requestTimeoutSeconds),
-            onTimeout: () => throw ApiException(
-              message: 'Request timeout',
-              statusCode: 408,
-            ),
-          );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return _parseResponse(response.body);
-      } else {
-        _handleErrorResponse(response);
-      }
-    } on ApiException {
-      rethrow;
-    } catch (e) {
-      debugPrint('HttpClient: PATCH error: $e');
-      throw ApiException(message: 'Failed to complete PATCH request: $e');
-    }
-  }
+  }) => _send('PATCH', endpoint, body: body, headers: headers);
 
   /// Perform DELETE request
-  Future<dynamic> delete(
-    String endpoint, {
-    Map<String, String>? headers,
-  }) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.apiEndpoint}$endpoint');
-
-      debugPrint('HttpClient: DELETE $uri');
-
-      final response = await _httpClient
-          .delete(
-            uri,
-            headers: _buildHeaders(additional: headers),
-          )
-          .timeout(
-            const Duration(seconds: ApiConfig.requestTimeoutSeconds),
-            onTimeout: () => throw ApiException(
-              message: 'Request timeout',
-              statusCode: 408,
-            ),
-          );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return _parseResponse(response.body);
-      } else {
-        _handleErrorResponse(response);
-      }
-    } on ApiException {
-      rethrow;
-    } catch (e) {
-      debugPrint('HttpClient: DELETE error: $e');
-      throw ApiException(message: 'Failed to complete DELETE request: $e');
-    }
-  }
+  Future<dynamic> delete(String endpoint, {Map<String, String>? headers}) =>
+      _send('DELETE', endpoint, headers: headers);
 
   /// Dispose HTTP client
   void dispose() {

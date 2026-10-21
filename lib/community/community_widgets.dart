@@ -1,7 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:intl/intl.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+
+import '../core/http_client.dart';
 
 import 'package:flutter/material.dart';
 
@@ -194,7 +195,9 @@ class _CommunityFormState extends State<CommunityForm> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.title)),
     body: SafeArea(
-      child: ListView(
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           if (widget.description != null) ...[
@@ -246,6 +249,7 @@ class _CommunityFormState extends State<CommunityForm> {
             child: Text(busy ? 'Đang lưu…' : widget.button),
           ),
         ],
+        ),
       ),
     ),
   );
@@ -258,11 +262,13 @@ class CommunityList extends StatefulWidget {
     required this.builder,
     required this.emptyTitle,
     required this.emptyDescription,
+    this.emptyAction,
     this.header,
   });
   final Future<Json> Function(Json? cursor) load;
   final Widget Function(Json item, VoidCallback refresh) builder;
   final String emptyTitle, emptyDescription;
+  final Widget? emptyAction;
   final Widget? header;
   @override
   State<CommunityList> createState() => CommunityListState();
@@ -318,7 +324,7 @@ class CommunityListState extends State<CommunityList> {
       if (mounted && ticket == generation) {
         setState(() {
           error = CommunityRepository.error(e);
-          if (e is FirebaseFunctionsException &&
+          if (e is ApiException &&
               [
                 'permission-denied',
                 'unauthenticated',
@@ -371,7 +377,11 @@ class CommunityListState extends State<CommunityList> {
           );
         }
         if (items.isEmpty && cursor == null) {
-          return CommunityEmpty(widget.emptyTitle, widget.emptyDescription);
+          return CommunityEmpty(
+            widget.emptyTitle,
+            widget.emptyDescription,
+            action: widget.emptyAction,
+          );
         }
         if (cursor != null) {
           return TextButton(

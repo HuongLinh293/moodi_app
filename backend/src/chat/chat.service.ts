@@ -12,6 +12,8 @@ import { Message } from './entities/message.entity';
 import { User } from '../users/entities/user.entity';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { Friend } from '../friends/entities/friend.entity';
+import { pageParams } from '../common/pagination';
 
 @Injectable()
 export class ChatService {
@@ -24,15 +26,17 @@ export class ChatService {
     private messagesRepository: Repository<Message>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Friend)
+    private friendsRepository: Repository<Friend>,
   ) {}
 
   // Get conversations for a user
-  async getConversations(userId: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+  async getConversations(userId: string, pageQuery?: unknown, limitQuery?: unknown) {
+    const { page, limit, skip } = pageParams(pageQuery, limitQuery);
 
     const [participants, total] = await this.participantsRepository.findAndCount({
       where: { userId },
-      relations: ['conversation', 'conversation.messages'],
+      relations: ['conversation'],
       skip,
       take: limit,
       order: { joinedAt: 'DESC' },
@@ -86,6 +90,19 @@ export class ChatService {
       throw new BadRequestException('Một hoặc nhiều người dùng không tồn tại');
     }
 
+    // Chỉ được kéo bạn bè vào cuộc trò chuyện, tránh spam/quấy rối người lạ.
+    const others = participantIds.filter((id) => id !== userId);
+    const friendCount = await this.friendsRepository.count({
+      where: { userId, friendId: In(others), status: 'accepted' },
+    });
+    if (friendCount !== others.length) {
+      throw new ForbiddenException('Chỉ có thể trò chuyện với bạn bè');
+    }
+
+    if (createConversationDto.type === 'direct' && participantIds.length !== 2) {
+      throw new BadRequestException('Trò chuyện trực tiếp chỉ gồm 2 người');
+    }
+
     // For direct messages, check if conversation already exists
     if (createConversationDto.type === 'direct' && participantIds.length === 2) {
       const existing = await this.findDirectConversation(
@@ -125,7 +142,12 @@ export class ChatService {
   }
 
   // Get messages in conversation
-  async getMessages(conversationId: string, userId: string, page = 1, limit = 20) {
+  async getMessages(
+    conversationId: string,
+    userId: string,
+    pageQuery?: unknown,
+    limitQuery?: unknown,
+  ) {
     // Check if user is participant
     const isParticipant = await this.participantsRepository.findOne({
       where: { conversationId, userId },
@@ -137,7 +159,7 @@ export class ChatService {
       );
     }
 
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = pageParams(pageQuery, limitQuery, { defaultLimit: 20 });
 
     const [messages, total] = await this.messagesRepository.findAndCount({
       where: { conversationId },
@@ -200,7 +222,7 @@ export class ChatService {
     });
 
     if (!savedWithSender) {
-      throw new Error('Failed to save message');
+      throw new NotFoundException('Không tìm thấy tin nhắn vừa gửi');
     }
 
     return {
@@ -287,24 +309,19 @@ export class ChatService {
 
   // Helper methods
   private async findDirectConversation(userId1: string, userId2: string) {
-    const conversation = await this.conversationsRepository
+    // Conversation không khai báo quan hệ participants; lọc qua bảng tham gia.
+    return this.conversationsRepository
       .createQueryBuilder('c')
-      .innerJoinAndSelect(
-        'c.participants',
-        'p1',
-        'p1.conversationId = c.id AND p1.userId = :userId1',
+      .where('c.type = :type', { type: 'direct' })
+      .andWhere(
+        'c.id IN (SELECT p1."conversationId" FROM conversation_participants p1 WHERE p1."userId" = :userId1)',
         { userId1 },
       )
-      .innerJoin(
-        'c.participants',
-        'p2',
-        'p2.conversationId = c.id AND p2.userId = :userId2',
+      .andWhere(
+        'c.id IN (SELECT p2."conversationId" FROM conversation_participants p2 WHERE p2."userId" = :userId2)',
         { userId2 },
       )
-      .where('c.type = :type', { type: 'direct' })
       .getOne();
-
-    return conversation;
   }
 
   private formatConversationResponse(conversation: Conversation) {
@@ -333,5 +350,14 @@ export class ChatService {
       createdAt: message.createdAt,
       editedAt: message.editedAt,
     };
+  }
+
+  async friendIds(userId: string): Promise<string[]> {
+    const friends = await this.friendsRepository.find({
+      where: { userId, status: 'accepted' },
+      select: { friendId: true },
+      take: 500,
+    });
+    return friends.map((f) => f.friendId);
   }
 }

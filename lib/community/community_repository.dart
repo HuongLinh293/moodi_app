@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../core/api_config.dart';
+import '../core/http_client.dart';
 
 typedef Json = Map<String, dynamic>;
 
@@ -12,12 +12,12 @@ typedef Json = Map<String, dynamic>;
 class CommunityRepository {
   CommunityRepository({
     this.uid,
-    this.functions,
+    this.httpClient,
     this.sessionValid,
     this.transport,
   });
   final String? uid;
-  final FirebaseFunctions? functions;
+  final HttpClient? httpClient;
   final bool Function()? sessionValid;
   final Future<Json> Function(Json payload)? transport;
 
@@ -31,7 +31,7 @@ class CommunityRepository {
 
   bool get validSession {
     if (sessionValid != null) return sessionValid!();
-    return uid != null && FirebaseAuth.instance.currentUser?.uid == uid;
+    return uid != null && (httpClient ?? HttpClient()).authToken != null;
   }
 
   Future<Json> call(String action, [Json data = const {}]) async {
@@ -43,17 +43,15 @@ class CommunityRepository {
     if (transport != null) {
       result = await transport!(payload);
     } else {
-      final response =
-          await (functions ??
-                  FirebaseFunctions.instanceFor(region: 'asia-southeast1'))
-              .httpsCallable(
-                'community',
-                options: HttpsCallableOptions(
-                  timeout: const Duration(seconds: 60),
-                ),
-              )
-              .call<dynamic>(payload);
-      result = Map<String, dynamic>.from(response.data as Map);
+      // Mọi kiểm tra quyền, idempotency và hạn mức nằm ở server (/community).
+      final response = await (httpClient ?? HttpClient()).post(
+        ApiConfig.communityEndpoint,
+        body: payload,
+      );
+      if (response is! Map<String, dynamic>) {
+        throw ApiException(message: 'Phản hồi cộng đồng không hợp lệ.');
+      }
+      result = response;
     }
     if (!validSession) throw StateError('Phiên đăng nhập đã thay đổi.');
     return result;
@@ -66,11 +64,12 @@ class CommunityRepository {
       base64Decode((await call(action, scope))['image'] as String);
 
   static String error(Object error) {
-    if (error is FirebaseFunctionsException) {
-      if (error.code == 'not-found' || error.code == 'unimplemented') {
-        return error.message?.contains('Bài viết') == true
-            ? error.message!
-            : 'Dịch vụ cộng đồng chưa sẵn sàng. Hãy thử lại sau.';
+    if (error is ApiException) {
+      // 404 do route không tồn tại ("Cannot POST ...") khác với 404 nghiệp vụ
+      // như "Người này chưa tạo hồ sơ cộng đồng."
+      if (error.code == 'unimplemented' ||
+          (error.code == 'not-found' && error.message.startsWith('Cannot '))) {
+        return 'Dịch vụ cộng đồng chưa sẵn sàng. Hãy thử lại sau.';
       }
       if ([
         'unavailable',
@@ -79,7 +78,7 @@ class CommunityRepository {
       ].contains(error.code)) {
         return 'Chưa kết nối được cộng đồng. Nội dung bạn viết vẫn được giữ; hãy thử lại.';
       }
-      return error.message ?? 'Không thực hiện được. Hãy thử lại.';
+      return error.message;
     }
     if (error is StateError) return error.message.toString();
     return 'Không thực hiện được. Hãy kiểm tra kết nối và thử lại.';

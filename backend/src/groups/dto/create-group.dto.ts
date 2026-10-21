@@ -1,4 +1,5 @@
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MaxLength, Matches } from 'class-validator';
+import { SAFE_MEDIA_URL } from '../../common/media-url';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateGroupDto {
@@ -16,5 +17,6 @@ export class CreateGroupDto {
   @ApiProperty({ example: 'image-url', required: false })
   @IsOptional()
   @IsString()
+  @Matches(SAFE_MEDIA_URL, { message: 'Ảnh phải là URL https hoặc file trong /api/storage' })
   image?: string;
 }

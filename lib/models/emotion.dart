@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../core/theme/colors.dart';
 
 enum EmotionCategory {
@@ -164,7 +165,16 @@ class MindraEmotions {
   };
 
   static const List<String> primaryKeys = [
-    'calm', 'happy', 'stressed', 'sad', 'anxious', 'angry', 'tired', 'ashamed', 'grateful', 'numb'
+    'calm',
+    'happy',
+    'stressed',
+    'sad',
+    'anxious',
+    'angry',
+    'tired',
+    'ashamed',
+    'grateful',
+    'numb',
   ];
 
   static EmotionInfo get(String? key) => all[key] ?? all['calm']!;
