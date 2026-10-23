@@ -19,6 +19,14 @@ class SettingsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Màn này được push riêng nên phải tự lắng nghe state để công tắc cập nhật.
+    return ListenableBuilder(
+      listenable: state,
+      builder: (context, _) => _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     return SingleChildScrollView(
       physics: MindraMotion.of(state.lowStimulationMode).scrollPhysics,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
@@ -57,6 +65,10 @@ class SettingsView extends StatelessWidget {
           _buildGoalsSection(context),
           const SizedBox(height: 18),
 
+          // Nhắc check-in hằng ngày
+          _buildReminderSection(context),
+          const SizedBox(height: 18),
+
           // 3. Quyền riêng tư & AI minh bạch (S20)
           _buildPrivacyAndAiSection(context),
           const SizedBox(height: 18),
@@ -74,6 +86,82 @@ class SettingsView extends StatelessWidget {
           const SizedBox(height: 32),
         ],
       ),
+    );
+  }
+
+  Widget _buildReminderSection(BuildContext context) {
+    void showDenied() {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Moodi chưa được phép gửi thông báo. Hãy bật quyền trong Cài đặt của máy.',
+          ),
+        ),
+      );
+    }
+
+    return _buildSectionCard(
+      title: 'NHẮC NHỞ',
+      icon: Icons.notifications_none_rounded,
+      children: [
+        SwitchListTile.adaptive(
+          key: const ValueKey('reminder-switch'),
+          contentPadding: EdgeInsets.zero,
+          activeTrackColor: AppColors.mint,
+          title: Text(
+            'Nhắc check-in hằng ngày',
+            style: AppTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            'Một lời nhắc nhẹ mỗi ngày để ghi lại cảm xúc.',
+            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+          ),
+          value: state.reminderEnabled,
+          onChanged: (val) async {
+            if (!await state.setReminderEnabled(val) && context.mounted) {
+              showDenied();
+            }
+          },
+        ),
+        if (state.reminderEnabled) ...[
+          const Divider(height: 20),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              'Giờ nhắc',
+              style: AppTypography.bodyMedium.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            trailing: Text(
+              state.reminderTime,
+              style: AppTypography.bodyMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.orange,
+              ),
+            ),
+            onTap: () async {
+              final parts = state.reminderTime.split(':');
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay(
+                  hour: int.parse(parts[0]),
+                  minute: int.parse(parts[1]),
+                ),
+                helpText: 'Chọn giờ nhắc',
+              );
+              if (picked == null) return;
+              final time =
+                  '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+              if (!await state.setReminderTime(time) && context.mounted) {
+                showDenied();
+              }
+            },
+          ),
+        ],
+      ],
     );
   }
 
