@@ -19,6 +19,31 @@ CommunityRepository repository(Future<Json> Function(Json) handler) =>
     );
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+  test('friend codes accept pasted display formatting', () {
+    expect(normalizeCommunityHandleInput(' @ABCD 1234-EF56 '), 'abcd1234ef56');
+    expect(formatCommunityHandle('abcd1234ef56'), 'ABCD 1234 EF56');
+  });
+  testWidgets('empty group exposes a composer action', (tester) async {
+    final repo = repository((payload) async {
+      if (payload['action'] == 'feed') return {'items': <Json>[]};
+      throw StateError('Unexpected action: ${payload['action']}');
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommunityGroupPage(
+          repo: repo,
+          space: 'family',
+          name: 'Gia Đình nhỏ',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Viết trong nhóm'), findsOneWidget);
+    await tester.tap(find.text('Viết trong nhóm'));
+    await tester.pumpAndSettle();
+    expect(find.text('Đăng tại: Gia Đình nhỏ'), findsOneWidget);
+    expect(find.text('Đăng vào nhóm'), findsOneWidget);
+  });
   test(
     'backend errors propagate instead of silently becoming demo successes',
     () async {

@@ -30,11 +30,24 @@ class GardenView extends StatefulWidget {
 
 class _GardenViewState extends State<GardenView> {
   late String _monthKey;
+  late int _seenFocusSeq;
 
   @override
   void initState() {
     super.initState();
-    _monthKey = widget.state.currentGardenMonthKey();
+    _seenFocusSeq = widget.state.gardenFocusSeq;
+    _monthKey =
+        widget.state.gardenFocusMonthKey ??
+        widget.state.currentGardenMonthKey();
+  }
+
+  @override
+  void didUpdateWidget(covariant GardenView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final state = widget.state;
+    if (state.gardenFocusSeq == _seenFocusSeq) return;
+    _seenFocusSeq = state.gardenFocusSeq;
+    _monthKey = state.gardenFocusMonthKey ?? state.currentGardenMonthKey();
   }
 
   String _monthTitle(String monthKey) {

@@ -66,6 +66,18 @@ class _JournalViewState extends State<JournalView> {
     return _isSameDay(d, DateTime.now());
   }
 
+  bool _isFuture(DateTime d) {
+    final now = DateTime.now();
+    return DateTime(d.year, d.month, d.day)
+        .isAfter(DateTime(now.year, now.month, now.day));
+  }
+
+  bool get _isDisplayingCurrentMonth {
+    final now = DateTime.now();
+    return _displayedMonth.year == now.year &&
+        _displayedMonth.month == now.month;
+  }
+
   void _onDateSelected(DateTime date) {
     MindraMotion.of(widget.state.lowStimulationMode).light();
     setState(() {
@@ -88,6 +100,7 @@ class _JournalViewState extends State<JournalView> {
   }
 
   void _nextMonth() {
+    if (_isDisplayingCurrentMonth) return;
     MindraMotion.of(widget.state.lowStimulationMode).light();
     setState(() {
       _displayedMonth = DateTime(
@@ -132,6 +145,7 @@ class _JournalViewState extends State<JournalView> {
     DateTime targetDate, [
     JournalEntry? existingEntry,
   ]) {
+    if (existingEntry == null && _isFuture(targetDate)) return;
     MindraMotion.of(widget.state.lowStimulationMode).medium();
     final isEditing = existingEntry != null;
     String selectedKey = existingEntry?.emotionKey ?? 'calm';
@@ -481,9 +495,11 @@ class _JournalViewState extends State<JournalView> {
   void _confirmDeleteEntry(JournalEntry entry) {
     MindraMotion.of(widget.state.lowStimulationMode).light();
     final emo = MindraEmotions.get(entry.emotionKey);
+    var deleting = false;
     showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(
@@ -498,7 +514,7 @@ class _JournalViewState extends State<JournalView> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
+            onPressed: deleting ? null : () => Navigator.pop(dialogCtx),
             child: Text(
               'Hủy',
               style: AppTypography.button.copyWith(
@@ -510,16 +526,21 @@ class _JournalViewState extends State<JournalView> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.orange,
               foregroundColor: Colors.white,
+              disabledBackgroundColor: AppColors.orange.withValues(alpha: 0.6),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: () async {
+            onPressed: deleting
+                ? null
+                : () async {
+              setDialogState(() => deleting = true);
               try {
                 await widget.state.removeEntry(entry.id);
               } catch (_) {
                 if (!dialogCtx.mounted) return;
+                setDialogState(() => deleting = false);
                 ScaffoldMessenger.of(dialogCtx).showSnackBar(
                   const SnackBar(
                     content: Text('Chưa xóa được ghi chép. Hãy thử lại.'),
@@ -542,9 +563,19 @@ class _JournalViewState extends State<JournalView> {
                 ),
               );
             },
-            child: const Text('Xóa'),
+            child: deleting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Xóa'),
           ),
         ],
+        ),
       ),
     );
   }
@@ -712,6 +743,7 @@ class _JournalViewState extends State<JournalView> {
                     final cellDate = DateTime(year, month, dayNum);
                     final isSelected = _isSameDay(cellDate, _selectedDate);
                     final isToday = _isToday(cellDate);
+                    final isFuture = _isFuture(cellDate);
 
                     final dayEntries = _getEntriesForDate(cellDate);
                     final hasEntry = dayEntries.isNotEmpty;
@@ -735,10 +767,13 @@ class _JournalViewState extends State<JournalView> {
                         preferBelow: false,
                         child: Semantics(
                           button: true,
+                          enabled: !isFuture,
                           selected: isSelected,
                           label: tooltipText,
                           child: GestureDetector(
-                            onTap: () => _onDateSelected(cellDate),
+                            onTap: isFuture
+                                ? null
+                                : () => _onDateSelected(cellDate),
                             behavior: HitTestBehavior.opaque,
                             child: AnimatedContainer(
                               duration: MindraMotion.of(
@@ -779,7 +814,12 @@ class _JournalViewState extends State<JournalView> {
                                           ? AppColors.ink
                                           : (isToday
                                                 ? AppColors.orange
-                                                : AppColors.textMuted),
+                                                : (isFuture
+                                                      ? AppColors.textTertiary
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            )
+                                                      : AppColors.textMuted)),
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -1175,8 +1215,13 @@ class _JournalViewState extends State<JournalView> {
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
                               onPressed: () async {
-                                if (widget.state.isPlanted(entry.id)) {
-                                  widget.state.openGarden();
+                                final moment = widget.state.momentForEntry(
+                                  entry.id,
+                                );
+                                if (moment != null) {
+                                  widget.state.openGarden(
+                                    monthKey: moment.monthKey,
+                                  );
                                   return;
                                 }
                                 final success = await runGardenAction(
@@ -1775,21 +1820,24 @@ class _JournalViewState extends State<JournalView> {
               ),
               const SizedBox(width: 6),
               GestureDetector(
-                onTap: _nextMonth,
+                onTap: _isDisplayingCurrentMonth ? null : _nextMonth,
                 behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.line),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      size: 22,
-                      color: AppColors.ink,
+                child: Opacity(
+                  opacity: _isDisplayingCurrentMonth ? 0.35 : 1,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 22,
+                        color: AppColors.ink,
+                      ),
                     ),
                   ),
                 ),

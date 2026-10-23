@@ -14,6 +14,12 @@ const str = (value, max, required = false) => {
   if (typeof value !== 'string' || value.length > max || (required && !value.trim())) fail('invalid-argument', 'Nội dung trống hoặc quá dài.');
   return value.trim();
 };
+const normalizeHandle = value => {
+  if (typeof value !== 'string') fail('invalid-argument', 'Mã bạn bè không hợp lệ.');
+  const handle = value.trim().toLowerCase().replace(/^@/, '').replace(/[\s-]/g, '');
+  if (!/^[a-z0-9]{12}$/.test(handle)) fail('invalid-argument', 'Mã bạn bè phải có đúng 12 chữ hoặc số.');
+  return handle;
+};
 const pairId = (a, b) => createHash('sha256').update(JSON.stringify([a, b].sort())).digest('hex');
 const schemas = {
   bootstrap: [], profile: ['target'], saveProfile: ['name', 'bio'], search: ['handle'],
@@ -27,10 +33,11 @@ const schemas = {
   connections: [], friendship: ['target', 'kind'], messages: ['target', 'cursor'],
   sendMessage: ['target', 'text', 'image'], image: ['space', 'postId', 'target', 'messageId'],
   report: ['space', 'postId', 'commentId', 'target', 'messageId', 'reason'],
+  notifications: [], markNotificationsRead: [],
   reports: ['cursor'], reportImage: ['reportId'], moderate: ['reportId', 'kind'],
 };
 const mutations = new Set(['saveProfile','createPost','deletePost','toggleComments','react','comment',
-  'deleteComment','createGroup','invite','groupAction','friendship','sendMessage','report','moderate']);
+  'deleteComment','createGroup','invite','groupAction','friendship','sendMessage','report','moderate','markNotificationsRead']);
 const moods = ['', 'Vui vẻ','Bình yên','Buồn','Lo lắng','Áp lực','Tức giận','Biết ơn','Mệt mỏi'];
 const intents = ['', 'Chỉ muốn được lắng nghe','Muốn nghe lời khuyên','Có ai từng trải qua không?','Chia sẻ chuyện vui'];
 function validateRequest(request) {
@@ -150,7 +157,7 @@ function createCommunityService(db, bucket) {
       const ownId = () => createHash('sha256').update(`${uid}:${d.requestId}`).digest('hex');
       let out = {};
       if (d.action === 'bootstrap') {
-        let pending = 0, unread = 0, invites = 0;
+        let pending = 0, unread = 0, invites = 0, notifications = 0;
         if (me) {
           const connections = await tx.get(db.collection('community_connections').where('members','array-contains',uid).limit(200));
           for (const doc of connections.docs) {
@@ -162,8 +169,9 @@ function createCommunityService(db, bucket) {
             }
           }
           invites=(await tx.get(db.collection('community_groups').where('invited','array-contains',uid).limit(100))).size;
+          notifications=(await tx.get(db.collection('community_notifications').where('recipient','==',uid).where('read','==',false).limit(100))).size;
         }
-        out = {me: me ? await profile(uid) : null, admin:isAdmin,pending,unread,invites};
+        out = {me: me ? await profile(uid) : null, admin:isAdmin,pending,unread,invites,notifications};
       } else if (d.action === 'saveProfile') {
         const name = str(d.name,40,true), bio = str(d.bio ?? '',160);
         const handle = me?.handle || randomBytes(6).toString('hex');
@@ -180,7 +188,7 @@ function createCommunityService(db, bucket) {
             break;
           }
           case 'search': {
-            const handle = str(d.handle,12,true).toLowerCase().replace(/^@/,'');
+            const handle = normalizeHandle(d.handle);
             const found = (await tx.get(db.doc(`community_handles/${id(handle)}`))).data();
             out = {profile:found ? await profile(found.uid) : null}; break;
           }
@@ -357,6 +365,14 @@ function createCommunityService(db, bucket) {
             } else {target=id(d.target);await profile(target);path=profileRef(target).path;evidence='';}
             check(target!==uid,'Không thể báo cáo nội dung của chính mình.');
             set(db.doc(`community_reports/${ownId()}`),{reporter:uid,target,path,evidence,imagePath,reason,status:'open',createdAt:stamp});break;
+          }
+          case 'notifications': {
+            const snap=await tx.get(db.collection('community_notifications').where('recipient','==',uid).orderBy('createdAt','desc').limit(50));
+            out={items:snap.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:doc.data().createdAt.toMillis(),isRead:doc.data().read===true}))};break;
+          }
+          case 'markNotificationsRead': {
+            const snap=await tx.get(db.collection('community_notifications').where('recipient','==',uid).where('read','==',false).limit(100));
+            for(const doc of snap.docs) update(doc.ref,{read:true});break;
           }
           case 'reports':
             check(isAdmin);out=await page(tx,db.collection('community_reports'),d.cursor);

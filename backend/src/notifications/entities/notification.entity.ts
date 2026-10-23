@@ -33,6 +33,9 @@ export class Notification {
   @Column({ type: 'text' })
   message: string;
 
+  @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
+  data: Record<string, unknown>;
+
   @Column({ default: false })
   isRead: boolean;
 

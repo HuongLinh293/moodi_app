@@ -162,4 +162,29 @@ void main() {
       expect(journal.deleted, ['save/new', 'user_1/*']);
     },
   );
+
+  test('Deleting an entry waits for its in-flight save', () async {
+    final journal = OrderedJournal();
+    final state = MindraState(
+      authRepository: GardenTestAuth(),
+      gardenRepository: RecordingGarden(),
+      journalRepository: journal,
+    );
+    addTearDown(state.dispose);
+    state.addEntry(
+      JournalEntry(
+        id: 'new',
+        timestamp: DateTime.now(),
+        emotionKey: 'sad',
+        intensity: 2,
+      ),
+    );
+    final removing = state.removeEntry('new');
+    await Future<void>.delayed(Duration.zero);
+    expect(journal.deleted, isEmpty);
+    journal.saveGate.complete();
+    await removing;
+    expect(journal.deleted, ['save/new', 'user_1/new']);
+    expect(state.entryById('new'), isNull);
+  });
 }

@@ -154,8 +154,17 @@ class MindraState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void openGarden() {
+  // Tháng mà khu vườn cần hiển thị khi được mở; seq tăng mỗi lần yêu cầu để
+  // GardenView vẫn nhảy tháng dù cùng monthKey được yêu cầu lần nữa.
+  String? _gardenFocusMonthKey;
+  String? get gardenFocusMonthKey => _gardenFocusMonthKey;
+  int _gardenFocusSeq = 0;
+  int get gardenFocusSeq => _gardenFocusSeq;
+
+  void openGarden({String? monthKey}) {
     _personalSpaceSection = 1;
+    _gardenFocusMonthKey = monthKey;
+    _gardenFocusSeq++;
     setTab(1);
     notifyListeners();
   }
@@ -534,6 +543,9 @@ class MindraState extends ChangeNotifier {
   final Map<String, int> _entryWriteVersions = {};
   int _entryWriteSequence = 0;
   final Set<Future<void>> _pendingWrites = {};
+  // Lệnh ghi đang chạy theo từng entry, để removeEntry chờ chúng xong trước
+  // khi xóa — nếu không, lệnh save tới server sau lệnh delete sẽ hồi sinh entry.
+  final Map<String, Set<Future<void>>> _pendingEntryWrites = {};
   EntrySyncStatus entrySyncStatus(String id) =>
       _entrySync[id] ?? EntrySyncStatus.synced;
   int get pendingEntryCount =>
@@ -575,7 +587,15 @@ class MindraState extends ChangeNotifier {
     if (uid == null) return;
     final write = _writeEntry(entry, uid, version);
     _pendingWrites.add(write);
-    unawaited(write.whenComplete(() => _pendingWrites.remove(write)));
+    final entryWrites = _pendingEntryWrites.putIfAbsent(entry.id, () => {})
+      ..add(write);
+    unawaited(
+      write.whenComplete(() {
+        _pendingWrites.remove(write);
+        entryWrites.remove(write);
+        if (entryWrites.isEmpty) _pendingEntryWrites.remove(entry.id);
+      }),
+    );
   }
 
   Future<void> _writeEntry(JournalEntry entry, String uid, int version) async {
@@ -606,6 +626,8 @@ class MindraState extends ChangeNotifier {
 
   Future<void> removeEntry(String id) async {
     final uid = _authRepository.currentUserId;
+    final pending = _pendingEntryWrites[id];
+    if (pending != null) await Future.wait(List.of(pending));
     if (uid != null) {
       if (isSharedPlanted(id)) await removeSharedMoment('${uid}_$id');
       await _journalRepository.deleteEntry(id, userId: uid);

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/theme/colors.dart';
+import '../core/theme/typography.dart';
+import '../widgets/airmail_border.dart';
 import 'community_repository.dart';
 import 'community_widgets.dart';
 import 'community_people.dart';
@@ -174,147 +176,155 @@ class _CommunityComposerState extends State<CommunityComposer> {
         child: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
           child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.creamDark,
-                borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.all(20),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.creamDark,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      widget.scope['space'] == 'public'
+                          ? Icons.public
+                          : Icons.lock_outline,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.message
+                                ? 'Gửi đến: ${widget.destination}'
+                                : 'Đăng tại: ${widget.destination}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            widget.message
+                                ? 'Chỉ hai bạn có thể đọc trong app.'
+                                : widget.scope['space'] == 'public'
+                                ? 'Mọi người trong app có thể xem.'
+                                : 'Chỉ thành viên nhóm có thể xem.',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    widget.scope['space'] == 'public'
-                        ? Icons.public
-                        : Icons.lock_outline,
+              const SizedBox(height: 20),
+              TextField(
+                controller: text,
+                enabled: !busy,
+                maxLength: 4000,
+                minLines: 3,
+                maxLines: 8,
+                decoration: InputDecoration(
+                  labelText: widget.message
+                      ? 'Lời nhắn của bạn'
+                      : 'Bạn muốn chia sẻ điều gì?',
+                  alignLabelWithHint: true,
+                ),
+              ),
+              if (!widget.message) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  'Cảm xúc (tùy chọn)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.message
-                              ? 'Gửi đến: ${widget.destination}'
-                              : 'Đăng tại: ${widget.destination}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final m in communityMoods)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            label: Text(m),
+                            selected: mood == m,
+                            onSelected: busy
+                                ? null
+                                : (on) => setState(() => mood = on ? m : ''),
+                          ),
                         ),
-                        Text(
-                          widget.message
-                              ? 'Chỉ hai bạn có thể đọc trong app.'
-                              : widget.scope['space'] == 'public'
-                              ? 'Mọi người trong app có thể xem.'
-                              : 'Chỉ thành viên nhóm có thể xem.',
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Bạn muốn được phản hồi thế nào?',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final i in communityIntents)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            label: Text(i),
+                            selected: intent == i,
+                            onSelected: busy
+                                ? null
+                                : (on) => setState(() => intent = on ? i : ''),
+                          ),
                         ),
-                      ],
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (photo != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.memory(photo!, height: 220, fit: BoxFit.cover),
+                ),
+                TextButton(
+                  onPressed: busy ? null : () => setState(() => photo = null),
+                  child: const Text('Bỏ ảnh'),
+                ),
+              ],
+              OutlinedButton.icon(
+                onPressed: busy ? null : pick,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text(photo == null ? 'Thêm ảnh' : 'Chọn ảnh khác'),
+              ),
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: text,
-              enabled: !busy,
-              maxLength: 4000,
-              minLines: 3,
-              maxLines: 8,
-              decoration: InputDecoration(
-                labelText: widget.message
-                    ? 'Lời nhắn của bạn'
-                    : 'Bạn muốn chia sẻ điều gì?',
-                alignLabelWithHint: true,
-              ),
-            ),
-            if (!widget.message) ...[
-              const SizedBox(height: 4),
-              const Text(
-                'Cảm xúc (tùy chọn)',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final m in communityMoods)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: FilterChip(
-                          label: Text(m),
-                          selected: mood == m,
-                          onSelected: busy
-                              ? null
-                              : (on) => setState(() => mood = on ? m : ''),
-                        ),
-                      ),
-                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Bạn muốn được phản hồi thế nào?',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final i in communityIntents)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: FilterChip(
-                          label: Text(i),
-                          selected: intent == i,
-                          onSelected: busy
-                              ? null
-                              : (on) => setState(() => intent = on ? i : ''),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            if (photo != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.memory(photo!, height: 220, fit: BoxFit.cover),
-              ),
-              TextButton(
-                onPressed: busy ? null : () => setState(() => photo = null),
-                child: const Text('Bỏ ảnh'),
-              ),
-            ],
-            OutlinedButton.icon(
-              onPressed: busy ? null : pick,
-              icon: const Icon(Icons.add_photo_alternate_outlined),
-              label: Text(photo == null ? 'Thêm ảnh' : 'Chọn ảnh khác'),
-            ),
-            if (error != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: busy ? null : send,
                 child: Text(
-                  error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  busy
+                      ? 'Đang gửi…'
+                      : widget.message
+                      ? 'Gửi tin nhắn'
+                      : widget.scope['space'] == 'public'
+                      ? 'Đăng công khai'
+                      : 'Đăng vào nhóm',
                 ),
               ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: busy ? null : send,
-              child: Text(
-                busy
-                    ? 'Đang gửi…'
-                    : widget.message
-                    ? 'Gửi tin nhắn'
-                    : widget.scope['space'] == 'public'
-                    ? 'Đăng công khai'
-                    : 'Đăng vào nhóm',
-              ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
@@ -330,109 +340,116 @@ class CommunityFeed extends StatefulWidget {
     this.name = 'Cộng đồng chung',
     this.author,
     this.emptyAction,
+    this.header,
   });
   final CommunityRepository repo;
   final String space, name;
   final String? author;
   final Widget? emptyAction;
+  final Widget? header;
   @override
-  State<CommunityFeed> createState() => _CommunityFeedState();
+  State<CommunityFeed> createState() => CommunityFeedState();
 }
 
-class _CommunityFeedState extends State<CommunityFeed> {
+class CommunityFeedState extends State<CommunityFeed> {
+  void refresh() => listKey.currentState?.refresh();
   final listKey = GlobalKey<CommunityListState>();
   String? selectedMood;
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _feedHeader() {
+    if (widget.space != 'public') {
+      return widget.header ?? const SizedBox.shrink();
+    }
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.space == 'public')
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
+        if (widget.header != null) widget.header!,
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  selected: selectedMood == null,
+                  label: const Text('Tất cả'),
+                  showCheckmark: false,
+                  selectedColor: AppColors.yellow,
+                  labelStyle: AppTypography.caption.copyWith(
+                    color: selectedMood == null
+                        ? AppColors.ink
+                        : AppColors.textSecondary,
+                    fontWeight: selectedMood == null
+                        ? FontWeight.w700
+                        : FontWeight.normal,
+                  ),
+                  onSelected: (_) {
+                    if (selectedMood != null) {
+                      setState(() => selectedMood = null);
+                      listKey.currentState?.refresh(clear: true);
+                    }
+                  },
+                ),
+              ),
+              for (final mood in communityMoods)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
-                    selected: selectedMood == null,
-                    label: const Text('Tất cả'),
-                    selectedColor: AppColors.ink,
-                    labelStyle: TextStyle(
-                      color: selectedMood == null
-                          ? AppColors.cream
-                          : AppColors.ink,
-                      fontWeight: selectedMood == null
+                    selected: selectedMood == mood,
+                    label: Text(mood),
+                    showCheckmark: false,
+                    selectedColor: AppColors.yellow,
+                    labelStyle: AppTypography.caption.copyWith(
+                      color: selectedMood == mood
+                          ? AppColors.ink
+                          : AppColors.textSecondary,
+                      fontWeight: selectedMood == mood
                           ? FontWeight.w700
                           : FontWeight.normal,
-                      fontSize: 12,
                     ),
                     onSelected: (_) {
-                      if (selectedMood != null) {
-                        setState(() => selectedMood = null);
-                        listKey.currentState?.refresh(clear: true);
-                      }
+                      setState(() {
+                        selectedMood = selectedMood == mood ? null : mood;
+                      });
+                      listKey.currentState?.refresh(clear: true);
                     },
                   ),
                 ),
-                for (final mood in communityMoods)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      selected: selectedMood == mood,
-                      label: Text(mood),
-                      selectedColor: AppColors.ink,
-                      labelStyle: TextStyle(
-                        color: selectedMood == mood
-                            ? AppColors.cream
-                            : AppColors.ink,
-                        fontWeight: selectedMood == mood
-                            ? FontWeight.w700
-                            : FontWeight.normal,
-                        fontSize: 12,
-                      ),
-                      onSelected: (_) {
-                        setState(() {
-                          selectedMood = selectedMood == mood ? null : mood;
-                        });
-                        listKey.currentState?.refresh(clear: true);
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        Expanded(
-          child: CommunityList(
-            key: listKey,
-            load: (cursor) => widget.repo.call('feed', {
-              'space': widget.space,
-              'cursor': ?cursor,
-              if (widget.author != null) 'author': widget.author,
-              if (selectedMood != null) 'mood': selectedMood,
-            }),
-            emptyTitle: selectedMood == null
-                ? 'Hôm nay điều gì đang ở trong lòng bạn?'
-                : 'Chưa có chia sẻ nào về "$selectedMood"',
-            emptyDescription: selectedMood == null
-                ? 'Viết một chia sẻ, tìm người đồng cảm, hoặc tạo nhóm riêng cho người bạn tin.'
-                : 'Hãy là người đầu tiên chia sẻ cảm xúc này.',
-            emptyAction: selectedMood == null ? widget.emptyAction : null,
-            header: null,
-            builder: (post, refresh) => CommunityPostCard(
-              key: ValueKey(post['id']),
-              repo: widget.repo,
-              space: widget.space,
-              post: post,
-              refresh: refresh,
-              onChanged: (updated) =>
-                  listKey.currentState?.replaceItem(updated),
-            ),
+            ],
           ),
         ),
+        const SizedBox(height: 8),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CommunityList(
+      key: listKey,
+      load: (cursor) => widget.repo.call('feed', {
+        'space': widget.space,
+        'cursor': ?cursor,
+        if (widget.author != null) 'author': widget.author,
+        if (selectedMood != null) 'mood': selectedMood,
+      }),
+      emptyTitle: selectedMood == null
+          ? 'Hôm nay điều gì đang ở trong lòng bạn?'
+          : 'Chưa có chia sẻ nào về "$selectedMood"',
+      emptyDescription: selectedMood == null
+          ? 'Tìm người đồng cảm hoặc tạo một nhóm riêng cho người bạn tin.'
+          : 'Hãy là người đầu tiên chia sẻ cảm xúc này.',
+      emptyAction: selectedMood == null ? widget.emptyAction : null,
+      header: _feedHeader(),
+      builder: (post, refresh) => CommunityPostCard(
+        key: ValueKey(post['id']),
+        repo: widget.repo,
+        space: widget.space,
+        post: post,
+        refresh: refresh,
+        onChanged: (updated) => listKey.currentState?.replaceItem(updated),
+      ),
     );
   }
 }
@@ -489,183 +506,208 @@ class _CommunityPostCardState extends State<CommunityPostCard> {
     final p = widget.post, own = p['author'] == widget.repo.uid;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.lineLight),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: CustomPaint(
+        painter: const AirmailBorderPainter(),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(23, 23, 23, 17),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CommunityAvatar(p['authorName'] as String? ?? 'Bạn'),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    alignment: Alignment.centerLeft,
-                    padding: EdgeInsets.zero,
+              Row(
+                children: [
+                  CommunityAvatar(p['authorName'] as String? ?? 'Bạn'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        padding: EdgeInsets.zero,
+                      ),
+                      onPressed: () async {
+                        await communityPush(
+                          context,
+                          CommunityProfilePage(
+                            repo: widget.repo,
+                            target: p['author'],
+                          ),
+                        );
+                        widget.refresh();
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p['authorName'] ?? 'Bạn',
+                            style: AppTypography.titleMedium,
+                          ),
+                          Text(
+                            communityTime(p['createdAt']),
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  onPressed: () async {
-                    await communityPush(
-                      context,
-                      CommunityProfilePage(
-                        repo: widget.repo,
-                        target: p['author'],
-                      ),
-                    );
-                    widget.refresh();
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        p['authorName'] ?? 'Bạn',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      Text(
-                        communityTime(p['createdAt']),
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Tùy chọn bài viết',
+                    onSelected: (value) async {
+                      if (value == 'report') {
+                        await reportCommunity(context, widget.repo, scope);
+                      } else if (value == 'block') {
+                        if (await communityConfirm(
+                          context,
+                          'Chặn người này?',
+                          'Bạn sẽ không còn thấy bài của họ, và hai bên không tương tác được.',
+                        )) {
+                          await widget.repo.mutate('friendship', {
+                            'target': p['author'],
+                            'kind': 'block',
+                          });
+                          widget.refresh();
+                        }
+                      } else if (value == 'delete') {
+                        if (await communityConfirm(
+                          context,
+                          'Xóa bài viết?',
+                          'Bài viết sẽ được gỡ khỏi nơi đã chia sẻ.',
+                        )) {
+                          await act('deletePost', {});
+                        }
+                      } else if (value == 'comments') {
+                        await act('toggleComments', {
+                          'enabled': p['commentsOpen'] != true,
+                        });
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      if (own || p['canDelete'] == true)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Xóa bài viết'),
+                        ),
+                      if (own)
+                        PopupMenuItem(
+                          value: 'comments',
+                          child: Text(
+                            p['commentsOpen'] == true
+                                ? 'Tắt bình luận'
+                                : 'Mở bình luận',
+                          ),
+                        ),
+                      if (!own) ...[
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('Báo cáo'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Text('Chặn người này'),
+                        ),
+                      ],
                     ],
                   ),
-                ),
+                ],
               ),
-              PopupMenuButton<String>(
-                tooltip: 'Tùy chọn bài viết',
-                onSelected: (value) async {
-                  if (value == 'report') {
-                    await reportCommunity(context, widget.repo, scope);
-                  } else if (value == 'block') {
-                    if (await communityConfirm(
-                      context,
-                      'Chặn người này?',
-                      'Bạn sẽ không còn thấy bài của họ, và hai bên không tương tác được.',
-                    )) {
-                      await widget.repo.mutate('friendship', {
-                        'target': p['author'],
-                        'kind': 'block',
-                      });
-                      widget.refresh();
-                    }
-                  } else if (value == 'delete') {
-                    if (await communityConfirm(
-                      context,
-                      'Xóa bài viết?',
-                      'Bài viết sẽ được gỡ khỏi nơi đã chia sẻ.',
-                    )) {
-                      await act('deletePost', {});
-                    }
-                  } else if (value == 'comments') {
-                    await act('toggleComments', {
-                      'enabled': p['commentsOpen'] != true,
-                    });
-                  }
-                },
-                itemBuilder: (_) => [
-                  if (own || p['canDelete'] == true)
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Xóa bài viết'),
-                    ),
-                  if (own)
-                    PopupMenuItem(
-                      value: 'comments',
-                      child: Text(
-                        p['commentsOpen'] == true
-                            ? 'Tắt bình luận'
-                            : 'Mở bình luận',
+              if ((p['mood'] as String? ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Transform.rotate(
+                    angle: -0.025,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.yellow.withValues(alpha: 0.24),
+                        border: Border.all(color: AppColors.ink, width: 0.8),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.local_post_office_outlined,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            p['mood'],
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.ink,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: .2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  if (!own) ...[
-                    const PopupMenuItem(
-                      value: 'report',
-                      child: Text('Báo cáo'),
+                  ),
+                ),
+              if ((p['text'] as String? ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 16, 2, 14),
+                  child: Text(
+                    p['text'],
+                    style: AppTypography.bodyLarge.copyWith(
+                      fontSize: 15,
+                      height: 1.65,
+                      color: AppColors.ink,
                     ),
-                    const PopupMenuItem(
-                      value: 'block',
-                      child: Text('Chặn người này'),
+                  ),
+                ),
+              if ((p['imagePath'] as String? ?? '').isNotEmpty)
+                CommunityPhoto(repo: widget.repo, scope: scope),
+              if ((p['intent'] as String? ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    p['intent'],
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: AppColors.textSecondary,
                     ),
-                  ],
+                  ),
+                ),
+              const SizedBox(height: 16),
+              const Divider(height: 1, color: AppColors.line),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton.icon(
+                    onPressed: busy
+                        ? null
+                        : () => act('react', {'enabled': p['liked'] != true}),
+                    icon: Icon(
+                      p['liked'] == true
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      size: 20,
+                    ),
+                    label: Text('Đồng cảm · ${p['likes'] ?? 0}'),
+                  ),
+                  if (!widget.detail)
+                    TextButton.icon(
+                      onPressed: () async {
+                        await communityPush(
+                          context,
+                          CommunityPostPage(
+                            repo: widget.repo,
+                            space: widget.space,
+                            postId: p['id'],
+                          ),
+                        );
+                        widget.refresh();
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                      label: const Text('Bình luận'),
+                    ),
                 ],
               ),
             ],
           ),
-          if ((p['mood'] as String? ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                p['mood'],
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          if ((p['text'] as String? ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                p['text'],
-                style: const TextStyle(fontSize: 16, height: 1.55),
-              ),
-            ),
-          if ((p['imagePath'] as String? ?? '').isNotEmpty)
-            CommunityPhoto(repo: widget.repo, scope: scope),
-          if ((p['intent'] as String? ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                p['intent'],
-                style: const TextStyle(
-                  fontStyle: FontStyle.italic,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              TextButton.icon(
-                onPressed: busy
-                    ? null
-                    : () => act('react', {'enabled': p['liked'] != true}),
-                icon: Icon(
-                  p['liked'] == true ? Icons.favorite : Icons.favorite_border,
-                  size: 20,
-                ),
-                label: Text('Đồng cảm · ${p['likes'] ?? 0}'),
-              ),
-              if (!own)
-                TextButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => reportCommunity(context, widget.repo, scope),
-                  icon: const Icon(Icons.flag_outlined, size: 20),
-                  label: const Text('Báo cáo'),
-                ),
-              if (!widget.detail)
-                TextButton.icon(
-                  onPressed: () async {
-                    await communityPush(
-                      context,
-                      CommunityPostPage(
-                        repo: widget.repo,
-                        space: widget.space,
-                        postId: p['id'],
-                      ),
-                    );
-                    widget.refresh();
-                  },
-                  icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                  label: const Text('Bình luận'),
-                ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

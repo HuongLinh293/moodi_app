@@ -277,7 +277,42 @@ class InMemoryCommunityTransport {
             )
             .length;
         final unread = 1; // 1 unread message from Minh
-        return {'me': me, 'admin': true, 'pending': pending, 'unread': unread};
+        return {
+          'me': me,
+          'admin': true,
+          'pending': pending,
+          'unread': unread,
+          'notifications': 2,
+        };
+
+      case 'notifications':
+        return {
+          'items': [
+            {
+              'id': 'notice_1',
+              'type': 'community_comment',
+              'message': 'Minh đã bình luận về chia sẻ của bạn.',
+              'data': {'space': 'public', 'postId': _posts.first['id']},
+              'isRead': false,
+              'createdAt': DateTime.now()
+                  .subtract(const Duration(minutes: 12))
+                  .millisecondsSinceEpoch,
+            },
+            {
+              'id': 'notice_2',
+              'type': 'community_friend_request',
+              'message': 'An đã gửi lời mời kết bạn.',
+              'data': {'target': 'user_an'},
+              'isRead': false,
+              'createdAt': DateTime.now()
+                  .subtract(const Duration(hours: 2))
+                  .millisecondsSinceEpoch,
+            },
+          ],
+        };
+
+      case 'markNotificationsRead':
+        return {};
 
       case 'saveProfile':
         final name = (payload['name'] as String? ?? '').trim();
@@ -321,7 +356,9 @@ class InMemoryCommunityTransport {
       case 'search':
         final handle = (payload['handle'] as String? ?? '')
             .trim()
-            .toLowerCase();
+            .toLowerCase()
+            .replaceFirst(RegExp(r'^@'), '')
+            .replaceAll(RegExp(r'[\s-]'), '');
         for (final p in _profiles.values) {
           if ((p['handle'] as String? ?? '').toLowerCase() == handle) {
             return {'profile': p};

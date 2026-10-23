@@ -151,7 +151,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Góc sẻ chia'), findsOneWidget);
+      expect(
+        find.text('Một góc nhỏ để sẻ chia.', findRichText: true),
+        findsOneWidget,
+      );
       expect(find.text('Chia sẻ chuyện vui'), findsOneWidget);
       expect(tester.takeException(), isNull);
       if (width == 375 && Platform.environment['COMMUNITY_CAPTURE'] == '1') {

@@ -24,9 +24,24 @@ async function bootstrap() {
   const apiPrefix = process.env.API_PREFIX || 'api';
   app.setGlobalPrefix(apiPrefix);
 
-  // CORS
+  // CORS: production stays allow-list only. During local development Flutter
+  // Web uses a random localhost port, so allow localhost/127.0.0.1 origins.
+  const configuredOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
+    origin: (origin, callback) => {
+      const isLocalDevOrigin =
+        !isProduction &&
+        !!origin &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      if (!origin || isLocalDevOrigin || configuredOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Origin is not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Delete-All'],

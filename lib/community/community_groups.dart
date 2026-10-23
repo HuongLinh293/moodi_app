@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/colors.dart';
+import '../core/theme/typography.dart';
 
 import 'community_repository.dart';
 import 'community_widgets.dart';
@@ -69,18 +70,32 @@ class _CommunityGroupsState extends State<CommunityGroups> {
       };
     },
     header: Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: OutlinedButton.icon(
-        onPressed: create,
-        icon: const Icon(Icons.add),
-        label: const Padding(
-          padding: EdgeInsets.symmetric(vertical: 14),
-          child: Text('Tạo nhóm riêng'),
-        ),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Vòng tròn thân quen', style: AppTypography.headlineLarge),
+          const SizedBox(height: 8),
+          Text(
+            'Một không gian nhỏ, dành cho những người bạn tin.',
+            style: AppTypography.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.ink,
+              foregroundColor: AppColors.cream,
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            onPressed: create,
+            icon: const Icon(Icons.add),
+            label: const Text('Tạo nhóm riêng'),
+          ),
+        ],
       ),
     ),
-    emptyTitle: 'Một góc nhỏ cho những người bạn tin',
-    emptyDescription: 'Tạo nhóm để chia sẻ câu chuyện với bạn bè hoặc gia đình. Nhóm chỉ mở cho người được mời.',
+    emptyTitle: 'Bạn chưa có nhóm nào',
+    emptyDescription: 'Nhóm bạn tạo hoặc lời mời tham gia sẽ xuất hiện ở đây.',
     builder: (g, refresh) => Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -153,7 +168,20 @@ class CommunityGroupPage extends StatefulWidget {
 }
 
 class _CommunityGroupPageState extends State<CommunityGroupPage> {
-  int revision = 0;
+  final feedKey = GlobalKey<CommunityFeedState>();
+
+  Future<void> compose() async {
+    await communityPush(
+      context,
+      CommunityComposer(
+        repo: widget.repo,
+        destination: widget.name,
+        scope: {'space': widget.space},
+      ),
+    );
+    if (mounted) feedKey.currentState?.refresh();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -167,18 +195,31 @@ class _CommunityGroupPageState extends State<CommunityGroupPage> {
               context,
               CommunityGroupSettings(repo: widget.repo, space: widget.space),
             );
-            if (mounted) setState(() => revision++);
+            if (mounted) feedKey.currentState?.refresh();
           },
         ),
       ],
     ),
     body: SafeArea(
       child: CommunityFeed(
-        key: ValueKey(revision),
+        key: feedKey,
         repo: widget.repo,
         space: widget.space,
         name: widget.name,
+        emptyAction: FilledButton.icon(
+          onPressed: compose,
+          icon: const Icon(Icons.edit_outlined, size: 18),
+          label: const Text('Viết trong nhóm'),
+        ),
       ),
+    ),
+    floatingActionButton: FloatingActionButton.small(
+      heroTag: 'group_compose_${widget.space}',
+      tooltip: 'Viết trong nhóm',
+      backgroundColor: AppColors.ink,
+      foregroundColor: AppColors.cream,
+      onPressed: compose,
+      child: const Icon(Icons.edit_outlined, size: 20),
     ),
   );
 }
@@ -471,8 +512,15 @@ class _CommunityGroupInviteSheetState extends State<CommunityGroupInviteSheet> {
   }
 
   Future<void> inviteByHandle() async {
-    final handle = handleController.text.trim();
+    final handle = normalizeCommunityHandleInput(handleController.text);
     if (handle.isEmpty) return;
+    if (!RegExp(r'^[a-z0-9]{12}$').hasMatch(handle)) {
+      communityError(
+        context,
+        StateError('Mã bạn bè phải có đúng 12 chữ hoặc số.'),
+      );
+      return;
+    }
     setState(() => searchBusy = true);
     try {
       final d = await widget.repo.call('search', {'handle': handle});
@@ -511,106 +559,109 @@ class _CommunityGroupInviteSheetState extends State<CommunityGroupInviteSheet> {
         child: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
           child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.line,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Mời vào nhóm',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: handleController,
-                      maxLength: 12,
-                      decoration: const InputDecoration(
-                        hintText: 'Nhập mã bạn bè (12 ký tự)',
-                        counterText: '',
-                        isDense: true,
-                        prefixIcon: Icon(Icons.tag, size: 18),
-                      ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.line,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: searchBusy ? null : inviteByHandle,
-                    child: Text(searchBusy ? 'Đang tìm…' : 'Mời'),
-                  ),
-                ],
-              ),
-              const Divider(height: 24),
-              const Text(
-                'Bạn bè của bạn (chạm để mời)',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : error != null
-                    ? Center(child: Text(error!))
-                    : friends.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Tất cả bạn bè đã tham gia nhóm hoặc bạn chưa có bạn bè mới.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: friends.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (ctx, i) {
-                          final f = friends[i];
-                          final p = json(f['profile']);
-                          final isInvited = invitedTargets.contains(p['id']);
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CommunityAvatar(p['name']),
-                            title: Text(p['name']),
-                            subtitle: Text('@${p['handle'] ?? ''}'),
-                            trailing: isInvited
-                                ? const Chip(
-                                    label: Text(
-                                      'Đã mời',
-                                      style: TextStyle(fontSize: 12),
-                                    ),
-                                    backgroundColor: AppColors.creamDark,
-                                  )
-                                : FilledButton.tonal(
-                                    onPressed: () => sendInvite(p['id']),
-                                    child: const Text('Mời'),
-                                  ),
-                          );
-                        },
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Mời vào nhóm',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
                       ),
-              ),
-            ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: handleController,
+                        maxLength: 20,
+                        decoration: const InputDecoration(
+                          hintText: 'Ví dụ: A1B2 C3D4 E5F6',
+                          counterText: '',
+                          isDense: true,
+                          prefixIcon: Icon(Icons.tag, size: 18),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: searchBusy ? null : inviteByHandle,
+                      child: Text(searchBusy ? 'Đang tìm…' : 'Mời'),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                const Text(
+                  'Bạn bè của bạn (chạm để mời)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : error != null
+                      ? Center(child: Text(error!))
+                      : friends.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Tất cả bạn bè đã tham gia nhóm hoặc bạn chưa có bạn bè mới.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: friends.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (ctx, i) {
+                            final f = friends[i];
+                            final p = json(f['profile']);
+                            final isInvited = invitedTargets.contains(p['id']);
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: CommunityAvatar(p['name']),
+                              title: Text(p['name']),
+                              subtitle: Text('@${p['handle'] ?? ''}'),
+                              trailing: isInvited
+                                  ? const Chip(
+                                      label: Text(
+                                        'Đã mời',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      backgroundColor: AppColors.creamDark,
+                                    )
+                                  : FilledButton.tonal(
+                                      onPressed: () => sendInvite(p['id']),
+                                      child: const Text('Mời'),
+                                    ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );

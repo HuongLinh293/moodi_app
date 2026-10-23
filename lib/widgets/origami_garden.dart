@@ -15,6 +15,7 @@ import '../models/garden_moment.dart';
 import '../models/journal_entry.dart';
 import '../state/mindra_state.dart';
 import 'garden_weather.dart';
+import 'airmail_border.dart';
 
 class GardenBedView extends StatefulWidget {
   final MindraState state;
@@ -177,93 +178,107 @@ class _GardenBedViewState extends State<GardenBedView> {
       child: Container(
         height: height,
         width: double.infinity,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: AppColors.yellow,
-          borderRadius: BorderRadius.circular(widget.compact ? 18 : 24),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) => Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: GardenBackdropPainter(compact: widget.compact),
-                ),
-              ),
-              Positioned.fill(
-                child: GardenWeatherAtmosphere(
-                  weather: _currentWeather,
-                  reducedMotion: widget.reducedMotion,
-                ),
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: GardenStemsPainter(bed: widget.bed),
-                  ),
-                ),
-              ),
-              if (!widget.compact)
-                Positioned(
-                  top: 10,
-                  right: 12,
-                  child: GardenWeatherBadge(
-                    weather: _currentWeather,
-                    onTap: _showWeatherDialog,
-                  ),
-                ),
-              if (_selectedMomentId != null)
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => setState(() => _selectedMomentId = null),
-                  ),
-                ),
-              ...widget.bed.moments.map((moment) {
-                final entry = widget.state.entryById(moment.entryId);
-                if (entry == null) return const SizedBox.shrink();
-                final slot = GardenLayout.slotAt(moment.slotIndex);
-                final bloom = widget.compact ? slot.size * 0.72 : slot.size;
-                final hit = math.max(bloom, 44.0);
-                final isSelected = _selectedMomentId == moment.id;
-                return Positioned(
-                  left: constraints.maxWidth * slot.x - hit / 2,
-                  top: constraints.maxHeight * slot.y - hit / 2,
-                  width: hit,
-                  height: hit,
-                  child: Center(
-                    child: SizedBox(
-                      width: bloom,
-                      height: bloom,
-                      child: _MomentBloomButton(
-                        moment: moment,
-                        entry: entry,
-                        bloomed: true,
-                        interactive: widget.interactive,
-                        reducedMotion: widget.reducedMotion,
-                        isSelected: isSelected,
-                        onTap: () {
-                          MindraMotion(widget.reducedMotion).selection();
-                          if (widget.compact) {
-                            widget.onOpenMoment?.call(moment);
-                            return;
-                          }
-                          if (_selectedMomentId == moment.id) {
-                            widget.onOpenMoment?.call(moment);
-                          } else {
-                            setState(() => _selectedMomentId = moment.id);
-                          }
-                        },
+        clipBehavior: Clip.none,
+        child: CustomPaint(
+          painter: AirmailBorderPainter(
+            radius: widget.compact ? 18 : 24,
+            inset: 5,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(5),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(widget.compact ? 13 : 19),
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: GardenBackdropPainter(compact: widget.compact),
                       ),
                     ),
-                  ),
-                );
-              }),
-              if (selectedMoment != null &&
-                  selectedEntry != null &&
-                  !widget.compact)
-                _buildCalloutBubble(constraints, selectedMoment, selectedEntry),
-            ],
+                    Positioned.fill(
+                      child: GardenWeatherAtmosphere(
+                        weather: _currentWeather,
+                        reducedMotion: widget.reducedMotion,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: GardenStemsPainter(bed: widget.bed),
+                        ),
+                      ),
+                    ),
+                    if (!widget.compact)
+                      Positioned(
+                        top: 10,
+                        right: 12,
+                        child: GardenWeatherBadge(
+                          weather: _currentWeather,
+                          onTap: _showWeatherDialog,
+                        ),
+                      ),
+                    if (_selectedMomentId != null)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () => setState(() => _selectedMomentId = null),
+                        ),
+                      ),
+                    ...widget.bed.moments.map((moment) {
+                      final entry = widget.state.entryById(moment.entryId);
+                      if (entry == null) return const SizedBox.shrink();
+                      final slot = GardenLayout.slotAt(moment.slotIndex);
+                      final bloom = widget.compact
+                          ? slot.size * 0.72
+                          : slot.size;
+                      final hit = math.max(bloom, 44.0);
+                      final isSelected = _selectedMomentId == moment.id;
+                      return Positioned(
+                        left: constraints.maxWidth * slot.x - hit / 2,
+                        top: constraints.maxHeight * slot.y - hit / 2,
+                        width: hit,
+                        height: hit,
+                        child: Center(
+                          child: SizedBox(
+                            width: bloom,
+                            height: bloom,
+                            child: _MomentBloomButton(
+                              moment: moment,
+                              entry: entry,
+                              bloomed: true,
+                              interactive: widget.interactive,
+                              reducedMotion: widget.reducedMotion,
+                              isSelected: isSelected,
+                              onTap: () {
+                                MindraMotion(widget.reducedMotion).selection();
+                                if (widget.compact) {
+                                  widget.onOpenMoment?.call(moment);
+                                  return;
+                                }
+                                if (_selectedMomentId == moment.id) {
+                                  widget.onOpenMoment?.call(moment);
+                                } else {
+                                  setState(() => _selectedMomentId = moment.id);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    if (selectedMoment != null &&
+                        selectedEntry != null &&
+                        !widget.compact)
+                      _buildCalloutBubble(
+                        constraints,
+                        selectedMoment,
+                        selectedEntry,
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

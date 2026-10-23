@@ -1,14 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../core/theme/colors.dart';
+import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
 import 'community_repository.dart';
 import 'community_widgets.dart';
 import 'community_posts.dart';
 import 'community_groups.dart';
 import 'community_people.dart';
+import 'community_notifications.dart';
 
 class CommunityView extends StatefulWidget {
   const CommunityView({super.key, required this.state, this.repository});
@@ -25,6 +28,22 @@ class _CommunityViewState extends State<CommunityView> {
   int section = 0;
   Timer? updates;
   bool loading = false;
+  final feedKey = GlobalKey<CommunityFeedState>();
+
+  String get formattedDate {
+    const days = [
+      'THỨ HAI',
+      'THỨ BA',
+      'THỨ TƯ',
+      'THỨ NĂM',
+      'THỨ SÁU',
+      'THỨ BẢY',
+      'CHỦ NHẬT',
+    ];
+    final now = DateTime.now();
+    return '${days[now.weekday - 1]} · ${DateFormat("dd 'THÁNG' MM, yyyy").format(now)}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -103,24 +122,23 @@ class _CommunityViewState extends State<CommunityView> {
     load();
   }
 
+  Future<void> compose() async {
+    await communityPush(
+      context,
+      CommunityComposer(
+        repo: repo,
+        destination: 'Cộng đồng chung',
+        scope: const {'space': 'public'},
+      ),
+    );
+    if (!mounted) return;
+    feedKey.currentState?.refresh();
+    load();
+  }
+
   Widget _emptyActions() {
     return Column(
       children: [
-        FilledButton(
-          onPressed: () async {
-            await communityPush(
-              context,
-              CommunityComposer(
-                repo: repo,
-                destination: 'Cộng đồng chung',
-                scope: const {'space': 'public'},
-              ),
-            );
-            load();
-          },
-          child: const Text('Viết một chia sẻ'),
-        ),
-        const SizedBox(height: 8),
         OutlinedButton(
           onPressed: () =>
               communityPush(context, CommunityPeoplePage(repo: repo)),
@@ -147,7 +165,12 @@ class _CommunityViewState extends State<CommunityView> {
         description: 'Chỉ người được mời mới vào được. Nhật ký riêng không đưa vào nhóm.',
         fields: const [
           (key: 'name', label: 'Tên nhóm', max: 60, initial: ''),
-          (key: 'description', label: 'Vài dòng về nhóm', max: 240, initial: ''),
+          (
+            key: 'description',
+            label: 'Vài dòng về nhóm',
+            max: 240,
+            initial: '',
+          ),
         ],
         submit: (values) async {
           name = values['name'] ?? '';
@@ -200,109 +223,167 @@ class _CommunityViewState extends State<CommunityView> {
         ],
       );
     }
+    final pending = bootstrap!['pending'] as int? ?? 0;
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(18, 16, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  'Góc sẻ chia',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(formattedDate, style: AppTypography.kicker),
                   ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Bạn bè',
-                onPressed: () =>
-                    communityPush(context, CommunityPeoplePage(repo: repo)),
-                icon: Badge(
-                  isLabelVisible: (bootstrap!['pending'] as int? ?? 0) > 0,
-                  label: Text('${bootstrap!['pending'] ?? 0}'),
-                  child: const Icon(Icons.people_outline, size: 22),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Tin nhắn',
-                onPressed: () => communityPush(
-                  context,
-                  CommunityPeoplePage(repo: repo, messages: true),
-                ),
-                icon: Badge(
-                  isLabelVisible: (bootstrap!['unread'] as int? ?? 0) > 0,
-                  label: Text('${bootstrap!['unread'] ?? 0}'),
-                  child: const Icon(Icons.chat_bubble_outline, size: 22),
-                ),
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Hồ sơ cộng đồng',
-                onSelected: (v) async {
-                  if (v == 'profile') {
-                    await communityPush(
-                      context,
-                      CommunityProfilePage(repo: repo, target: repo.uid!),
-                    );
-                  } else {
-                    await communityPush(
-                      context,
-                      CommunityModerationPage(repo: repo),
-                    );
-                  }
-                  load();
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'profile',
-                    child: Text('Hồ sơ của tôi'),
-                  ),
-                  if (bootstrap!['admin'] == true)
-                    const PopupMenuItem(
-                      value: 'moderation',
-                      child: Text('Xử lý báo cáo'),
+                  IconButton(
+                    tooltip: 'Thông báo',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () async {
+                      await communityPush(
+                        context,
+                        CommunityNotificationsPage(repo: repo),
+                      );
+                      load();
+                    },
+                    icon: Badge(
+                      isLabelVisible:
+                          (bootstrap!['notifications'] as int? ?? 0) > 0,
+                      label: Text('${bootstrap!['notifications'] ?? 0}'),
+                      child: const Icon(Icons.notifications_none, size: 22),
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Tin nhắn',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => communityPush(
+                      context,
+                      CommunityPeoplePage(repo: repo, messages: true),
+                    ),
+                    icon: Badge(
+                      isLabelVisible: (bootstrap!['unread'] as int? ?? 0) > 0,
+                      label: Text('${bootstrap!['unread'] ?? 0}'),
+                      child: const Icon(Icons.chat_bubble_outline, size: 22),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Thêm',
+                    icon: Badge(
+                      isLabelVisible: pending > 0,
+                      smallSize: 8,
+                      child: const Icon(Icons.more_vert, size: 22),
+                    ),
+                    onSelected: (v) async {
+                      if (v == 'friends') {
+                        await communityPush(
+                          context,
+                          CommunityPeoplePage(repo: repo),
+                        );
+                      } else if (v == 'profile') {
+                        await communityPush(
+                          context,
+                          CommunityProfilePage(repo: repo, target: repo.uid!),
+                        );
+                      } else {
+                        await communityPush(
+                          context,
+                          CommunityModerationPage(repo: repo),
+                        );
+                      }
+                      load();
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'friends',
+                        child: Row(
+                          children: [
+                            const Text('Bạn bè'),
+                            if (pending > 0) ...[
+                              const SizedBox(width: 8),
+                              Badge(label: Text('$pending')),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'profile',
+                        child: Text('Hồ sơ của tôi'),
+                      ),
+                      if (bootstrap!['admin'] == true)
+                        const PopupMenuItem(
+                          value: 'moderation',
+                          child: Text('Xử lý báo cáo'),
+                        ),
+                    ],
+                  ),
                 ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: RichText(
+                  text: TextSpan(
+                    style: AppTypography.displayMedium.copyWith(fontSize: 26),
+                    children: const [
+                      TextSpan(text: 'Một góc nhỏ '),
+                      TextSpan(
+                        text: 'để sẻ chia.',
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: AppColors.creamDark,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                for (final item in [
-                  (0, 'Chung', Icons.public),
-                  (1, 'Nhóm của tôi', Icons.lock_outline),
-                ])
-                  Expanded(
-                    child: Semantics(
-                      selected: section == item.$1,
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          backgroundColor: section == item.$1
-                              ? AppColors.cream
-                              : Colors.transparent,
-                          minimumSize: const Size(0, 44),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                        onPressed: () => setState(() => section = item.$1),
-                        icon: Icon(item.$3, size: 18),
-                        label: Text(
-                          item.$2,
-                          style: const TextStyle(fontSize: 13),
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+          child: Center(
+            child: FractionallySizedBox(
+              widthFactor: .86,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: AppColors.creamDark,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Row(
+                  children: [
+                    for (final item in [
+                      (0, 'Chung', Icons.public_outlined),
+                      (1, 'Nhóm của tôi', Icons.lock_outline),
+                    ])
+                      Expanded(
+                        child: Semantics(
+                          selected: section == item.$1,
+                          child: TextButton.icon(
+                            style: TextButton.styleFrom(
+                              backgroundColor: section == item.$1
+                                  ? AppColors.ink
+                                  : Colors.transparent,
+                              foregroundColor: section == item.$1
+                                  ? AppColors.cream
+                                  : AppColors.textSecondary,
+                              minimumSize: const Size(0, 44),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                            ),
+                            onPressed: () => setState(() => section = item.$1),
+                            icon: Icon(item.$3, size: 15),
+                            label: Text(
+                              item.$2,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -310,30 +391,25 @@ class _CommunityViewState extends State<CommunityView> {
           child: Stack(
             children: [
               section == 0
-                  ? CommunityFeed(repo: repo, emptyAction: _emptyActions())
+                  ? CommunityFeed(
+                      key: feedKey,
+                      repo: repo,
+                      emptyAction: _emptyActions(),
+                      header: const CommunityWelcome(),
+                    )
                   : CommunityGroups(repo: repo),
               // FAB for quick compose — always accessible while scrolling
               if (section == 0)
                 Positioned(
-                  right: 16,
-                  bottom: 16,
-                  child: FloatingActionButton.extended(
+                  right: 18,
+                  bottom: 18,
+                  child: FloatingActionButton.small(
                     heroTag: 'community_compose_fab',
-                    backgroundColor: AppColors.ink,
+                    tooltip: 'Viết một chia sẻ',
+                    backgroundColor: AppColors.orange,
                     foregroundColor: AppColors.cream,
-                    icon: const Icon(Icons.edit_outlined, size: 20),
-                    label: const Text('Chia sẻ'),
-                    onPressed: () async {
-                      await communityPush(
-                        context,
-                        CommunityComposer(
-                          repo: repo,
-                          destination: 'Cộng đồng chung',
-                          scope: const {'space': 'public'},
-                        ),
-                      );
-                      load();
-                    },
+                    onPressed: compose,
+                    child: const Icon(Icons.edit_outlined, size: 20),
                   ),
                 ),
             ],

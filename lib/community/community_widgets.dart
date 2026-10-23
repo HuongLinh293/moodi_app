@@ -7,6 +7,7 @@ import '../core/http_client.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/colors.dart';
+import '../core/theme/typography.dart';
 import 'community_repository.dart';
 
 String communityTime(dynamic milliseconds) {
@@ -76,13 +77,13 @@ class CommunityEmpty extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge,
+          style: AppTypography.headlineMedium,
         ),
         const SizedBox(height: 8),
         Text(
           description,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: AppTypography.bodyMedium,
         ),
         if (action != null) ...[const SizedBox(height: 20), action!],
       ],
@@ -198,57 +199,57 @@ class _CommunityFormState extends State<CommunityForm> {
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          if (widget.description != null) ...[
-            Text(widget.description!),
-            const SizedBox(height: 20),
-          ],
-          for (final f in widget.fields)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: TextField(
-                controller: controllers[f.key],
-                maxLength: f.max,
-                minLines: 1,
-                maxLines: f.max > 100 ? 5 : 1,
-                enabled: !busy,
-                decoration: InputDecoration(labelText: f.label),
+          padding: const EdgeInsets.all(20),
+          children: [
+            if (widget.description != null) ...[
+              Text(widget.description!),
+              const SizedBox(height: 20),
+            ],
+            for (final f in widget.fields)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: TextField(
+                  controller: controllers[f.key],
+                  maxLength: f.max,
+                  minLines: 1,
+                  maxLines: f.max > 100 ? 5 : 1,
+                  enabled: !busy,
+                  decoration: InputDecoration(labelText: f.label),
+                ),
               ),
-            ),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
-            ),
-          FilledButton(
-            onPressed: busy
-                ? null
-                : () async {
-                    setState(() {
-                      busy = true;
-                      error = null;
-                    });
-                    try {
-                      await widget.submit({
-                        for (final e in controllers.entries)
-                          e.key: e.value.text.trim(),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      setState(() {
+                        busy = true;
+                        error = null;
                       });
-                      if (context.mounted) Navigator.pop(context);
-                    } catch (e) {
-                      if (mounted) {
-                        setState(() => error = CommunityRepository.error(e));
+                      try {
+                        await widget.submit({
+                          for (final e in controllers.entries)
+                            e.key: e.value.text.trim(),
+                        });
+                        if (context.mounted) Navigator.pop(context);
+                      } catch (e) {
+                        if (mounted) {
+                          setState(() => error = CommunityRepository.error(e));
+                        }
+                      } finally {
+                        if (mounted) setState(() => busy = false);
                       }
-                    } finally {
-                      if (mounted) setState(() => busy = false);
-                    }
-                  },
-            child: Text(busy ? 'Đang lưu…' : widget.button),
-          ),
-        ],
+                    },
+              child: Text(busy ? 'Đang lưu…' : widget.button),
+            ),
+          ],
         ),
       ),
     ),
@@ -351,10 +352,13 @@ class CommunityListState extends State<CommunityList> {
     onRefresh: refresh,
     child: ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
       itemCount: items.length + 2,
       itemBuilder: (context, index) {
-        if (index == 0) return widget.header ?? const SizedBox.shrink();
+        if (index == 0) {
+          if (error != null && items.isEmpty) return const SizedBox.shrink();
+          return widget.header ?? const SizedBox.shrink();
+        }
         if (index <= items.length) {
           return widget.builder(items[index - 1], () {
             refresh();
@@ -391,6 +395,103 @@ class CommunityListState extends State<CommunityList> {
         }
         return const SizedBox.shrink();
       },
+    ),
+  );
+}
+
+/// A scrollable invitation to share, above the public feed.
+class CommunityWelcome extends StatelessWidget {
+  const CommunityWelcome({super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 17, 16, 18),
+              decoration: BoxDecoration(
+                color: AppColors.cream,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.ink, width: 1.2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.mail_outline_rounded, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'THƯ GỬI HÔM NAY',
+                          style: AppTypography.micro.copyWith(
+                            color: AppColors.ink,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.4,
+                          ),
+                        ),
+                      ),
+                      Transform.rotate(
+                        angle: .08,
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: AppColors.yellow,
+                            border: Border.all(color: AppColors.ink),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Icon(Icons.near_me_outlined, size: 18),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    'Gửi đi một điều đang ở trong lòng.',
+                    style: AppTypography.titleLarge.copyWith(
+                      fontSize: 18,
+                      letterSpacing: -0.45,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Viết vài dòng, rồi để sự đồng cảm tìm đến bạn.',
+                    style: AppTypography.bodySmall.copyWith(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 28,
+              top: -7,
+              child: Transform.rotate(
+                angle: -.08,
+                child: Container(
+                  width: 64,
+                  height: 13,
+                  color: AppColors.blue.withValues(alpha: .28),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'Những lá thư đang mở',
+          style: AppTypography.titleLarge.copyWith(letterSpacing: -0.4),
+        ),
+        const SizedBox(height: 8),
+      ],
     ),
   );
 }
