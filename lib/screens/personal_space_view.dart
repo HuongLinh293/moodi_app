@@ -52,7 +52,6 @@ class _PersonalSpaceViewState extends State<PersonalSpaceView> {
 
   @override
   Widget build(BuildContext context) {
-    final motion = MindraMotion.of(widget.state.lowStimulationMode);
     return Column(
       children: [
         Padding(
@@ -60,16 +59,17 @@ class _PersonalSpaceViewState extends State<PersonalSpaceView> {
           child: _buildSectionSwitcher(),
         ),
         Expanded(
-          child: AnimatedSwitcher(
-            duration: motion.duration,
-            child: _section == 0
-                ? JournalView(key: const ValueKey('journal'), state: widget.state)
-                : GardenView(
-                    key: const ValueKey('garden'),
-                    state: widget.state,
-                    onOpenCheckin: widget.onOpenCheckin,
-                    onOpenJournal: () => _setSection(0),
-                  ),
+          // IndexedStack giữ trạng thái (tháng, ngày đang chọn) khi chuyển mục.
+          child: IndexedStack(
+            index: _section,
+            children: [
+              JournalView(state: widget.state),
+              GardenView(
+                state: widget.state,
+                onOpenCheckin: widget.onOpenCheckin,
+                onOpenJournal: () => _setSection(0),
+              ),
+            ],
           ),
         ),
       ],
