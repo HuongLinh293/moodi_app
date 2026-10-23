@@ -7,6 +7,7 @@ import '../core/theme/typography.dart';
 import '../models/emotion.dart';
 import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
+import '../widgets/mood_trend_card.dart';
 import '../widgets/pattern_explorer_card.dart';
 import '../widgets/weekly_postcard_sheet.dart';
 
@@ -95,6 +96,13 @@ class ProgressView extends StatelessWidget {
           else ...[
             // Metrics Grid (S17: 4 chỉ số cốt lõi tuần này)
             _buildWeeklyMetricsGrid(dominantEmo),
+            const SizedBox(height: 16),
+
+            // Xu hướng cảm xúc theo ngày (7 / 30 ngày)
+            MoodTrendCard(
+              entries: entries,
+              lowStimulation: state.lowStimulationMode,
+            ),
             const SizedBox(height: 16),
 
             // Pattern & Nhận diện thấu cảm (S17)
