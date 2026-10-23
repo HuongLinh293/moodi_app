@@ -254,7 +254,7 @@ class _PauseModeSheetState extends State<PauseModeSheet>
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'PAUSE MODE (S06-P)',
+                          'KHOẢNG NGHỈ',
                           style: AppTypography.kicker.copyWith(
                             color: AppColors.blue,
                             fontWeight: FontWeight.w700,

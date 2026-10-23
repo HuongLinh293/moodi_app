@@ -51,7 +51,9 @@ void main() {
   testWidgets('Planted moment confirmation dismisses automatically', (
     tester,
   ) async {
-    final state = MindraState()..clearAllData();
+    final state = MindraState()
+      ..clearAllData()
+      ..selectEmotion('calm');
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -92,8 +94,8 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Hôm nay'), findsOneWidget);
-    expect(find.text('Nhật ký'), findsOneWidget);
-    expect(find.text('Khu vườn'), findsOneWidget);
+    expect(find.text('Góc riêng'), findsOneWidget);
+    expect(find.text('Cộng đồng'), findsOneWidget);
     expect(find.text('Khám phá'), findsOneWidget);
     expect(find.text('Tôi'), findsOneWidget);
     expect(find.text('MOODI GARDEN'), findsOneWidget);
@@ -110,7 +112,7 @@ void main() {
 
     await tester.tap(find.text('Nhật ký').last);
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.calendar_view_month_rounded), findsOneWidget);
+    expect(find.byType(JournalView), findsOneWidget);
 
     await tester.tap(find.text('Khám phá').last);
     await tester.pumpAndSettle();
@@ -226,7 +228,9 @@ void main() {
   testWidgets(
     'Quick check-in saves emotion and intensity without text fields',
     (WidgetTester tester) async {
-      final state = MindraState()..clearAllData();
+      final state = MindraState()
+        ..clearAllData()
+        ..selectEmotion('calm');
       final initialCount = state.entries.length;
 
       await tester.pumpWidget(
@@ -256,6 +260,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final state = createTestState();
+    state.selectEmotion('calm');
     final initialCount = state.entries.length;
 
     await tester.pumpWidget(
@@ -593,29 +598,149 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('LoginView renders Google and Apple sign in buttons', (
-    WidgetTester tester,
+  testWidgets(
+    'API login shows email form and registration without unsupported providers',
+    (tester) async {
+      final state = MindraState();
+      addTearDown(state.dispose);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<MindraState>.value(
+          value: state,
+          child: const MaterialApp(home: LoginView()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Email'), findsOneWidget);
+      expect(find.text('Mật khẩu'), findsOneWidget);
+      expect(find.byKey(const ValueKey('btn-google-sign-in')), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('toggle-auth-mode')),
+      );
+      await tester.tap(find.byKey(const ValueKey('toggle-auth-mode')));
+      await tester.pumpAndSettle();
+      // Tiêu đề và nút gửi đều là "Tạo tài khoản".
+      expect(find.text('Tạo tài khoản'), findsNWidgets(2));
+      expect(find.text('Xác nhận mật khẩu'), findsOneWidget);
+    },
+  );
+
+  test('Reflection template never invents a thought or trigger', () {
+    final empty = AIReflection.forEmotion(emotionKey: 'sad', intensity: 4);
+    expect(empty.intensifyingThought, isEmpty);
+    expect(empty.possibleTrigger, isEmpty);
+
+    final written = AIReflection.forEmotion(
+      emotionKey: 'sad',
+      intensity: 4,
+      situation: 'Bị từ chối',
+      thought: 'Mình thật vô dụng',
+    );
+    expect(written.intensifyingThought, 'Mình thật vô dụng');
+    expect(written.possibleTrigger, isNotEmpty);
+  });
+
+  testWidgets('Reflection hides thought card when the user wrote nothing', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final state = createTestState();
+    final entry = JournalEntry(
+      id: 'empty-reflection',
+      timestamp: DateTime.now(),
+      emotionKey: 'sad',
+      intensity: 4,
+    );
+    state.addEntry(entry);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AIReflectionView(
+          entry: entry,
+          state: state,
+          onOpenJournal: () {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(find.text('Góc nhìn cân bằng hơn'), findsOneWidget);
+    expect(find.text('Suy nghĩ có thể đang phóng đại'), findsNothing);
+    expect(find.text('Tác nhân nhận thấy'), findsNothing);
+  });
+
+  testWidgets('Saving from Home offers to keep the moment, then plants it', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final state = createTestState()..clearAllData();
+    await tester.pumpWidget(MindraApp(state: state));
+    await tester.pumpAndSettle();
+
+    // No feeling is assumed before the user picks one.
+    expect(find.text('Bạn đang thấy thế nào?'), findsOneWidget);
+    expect(find.text('Bắt đầu check-in'), findsNothing);
+    await tester.tap(find.text('Buồn').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Bạn đang thấy thế nào?'), findsNothing);
+    expect(state.selectedEmotionKey, 'sad');
+
+    await tester.ensureVisible(find.text('Bắt đầu check-in'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bắt đầu check-in'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Lưu check-in nhanh'));
+    await tester.tap(find.text('Lưu check-in nhanh'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Đã lưu check-in'), findsOneWidget);
+    expect(state.gardenMoments, isEmpty);
+
+    await tester.tap(find.text('Giữ trong vườn').last);
+    await tester.pumpAndSettle();
+    expect(state.gardenMoments, hasLength(1));
+    expect(find.text('Khoảnh khắc đã được giữ lại.'), findsOneWidget);
+  });
+
+  testWidgets('Pause sheet shows a single header', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MindraApp(state: createTestState()));
+    await tester.pumpAndSettle();
+
+    final pauseCard = find.byKey(const ValueKey('today-pause-card'));
+    await tester.ensureVisible(pauseCard);
+    await tester.tap(pauseCard);
+    await tester.pumpAndSettle();
+
+    expect(find.text('KHOẢNG NGHỈ'), findsOneWidget);
+    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+  });
+
+  testWidgets('Check-in cannot save before an emotion is chosen', (
+    tester,
   ) async {
     final state = MindraState()..clearAllData();
     await tester.pumpWidget(
-      ChangeNotifierProvider<MindraState>.value(
-        value: state,
-        child: const MaterialApp(home: LoginView()),
+      MaterialApp(
+        home: Scaffold(
+          body: CheckinView(state: state, onOpenJournal: () {}),
+        ),
       ),
     );
     await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('btn-google-sign-in')), findsOneWidget);
-    expect(find.byKey(const ValueKey('btn-apple-sign-in')), findsOneWidget);
-    expect(find.text('Tiếp tục với Google'), findsOneWidget);
-    expect(find.text('Tiếp tục với Apple'), findsOneWidget);
-
-    // Switch to register mode
-    await tester.tap(find.byKey(const ValueKey('toggle-auth-mode')));
+    expect(find.text('Chưa chọn cảm xúc'), findsOneWidget);
+    await tester.ensureVisible(find.text('Lưu check-in nhanh'));
+    await tester.tap(find.text('Lưu check-in nhanh'));
     await tester.pumpAndSettle();
+    expect(state.entries, isEmpty);
 
-    expect(find.text('Đăng ký bằng Google'), findsOneWidget);
-    expect(find.text('Đăng ký bằng Apple'), findsOneWidget);
-    expect(find.text('Tạo tài khoản'), findsWidgets);
+    await tester.tap(find.text('Lo lắng'));
+    await tester.pumpAndSettle();
+    expect(find.text('Chưa chọn cảm xúc'), findsNothing);
+    await tester.ensureVisible(find.text('Lưu check-in nhanh'));
+    await tester.tap(find.text('Lưu check-in nhanh'));
+    await tester.pumpAndSettle();
+    expect(state.entries.single.emotionKey, 'anxious');
   });
 }

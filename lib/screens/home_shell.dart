@@ -13,9 +13,9 @@ import '../state/mindra_state.dart';
 import 'today_view.dart';
 import 'checkin_view.dart';
 import 'practice_view.dart';
-import 'garden_view.dart';
-import 'journal_view.dart';
+import 'personal_space_view.dart';
 import 'explore_view.dart';
+import '../community/community_view.dart';
 import 'settings_view.dart';
 import 'pause_mode_sheet.dart';
 
@@ -158,7 +158,6 @@ class _HomeShellState extends State<HomeShell> {
         );
 
       case 1:
-        // Calendar
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -167,19 +166,15 @@ class _HomeShellState extends State<HomeShell> {
               height: 34,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.orange.withValues(alpha: 0.16),
+                color: AppColors.mint.withValues(alpha: 0.2),
               ),
               child: const Center(
-                child: Icon(
-                  Icons.calendar_month_rounded,
-                  size: 18,
-                  color: AppColors.orange,
-                ),
+                child: Icon(Icons.spa_outlined, size: 18, color: AppColors.ink),
               ),
             ),
             const SizedBox(width: 10),
             Text(
-              'Nhật ký',
+              'Góc riêng',
               style: AppTypography.titleMedium.copyWith(
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
@@ -197,19 +192,19 @@ class _HomeShellState extends State<HomeShell> {
               height: 34,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.mint.withValues(alpha: 0.2),
+                color: AppColors.orange.withValues(alpha: 0.16),
               ),
               child: const Center(
                 child: Icon(
-                  Icons.local_florist_rounded,
+                  Icons.forum_outlined,
                   size: 18,
-                  color: AppColors.ink,
+                  color: AppColors.orange,
                 ),
               ),
             ),
             const SizedBox(width: 10),
             Text(
-              'Khu vườn',
+              'Cộng đồng',
               style: AppTypography.titleMedium.copyWith(
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
@@ -265,7 +260,7 @@ class _HomeShellState extends State<HomeShell> {
         // Streak indicator (ở tab Hôm nay)
         if (currentTab == 0)
           Semantics(
-            label: 'Chuỗi hiện diện: ${state.consecutiveWeeks} tuần',
+            label: 'Chuỗi hiện diện: ${state.consecutiveDays} ngày',
             child: Padding(
               padding: EdgeInsets.only(right: isCompact ? 6 : 10),
               child: _cornerChip(
@@ -276,8 +271,8 @@ class _HomeShellState extends State<HomeShell> {
                     const SizedBox(width: 4),
                     Text(
                       isCompact
-                          ? '${state.consecutiveWeeks}'
-                          : '${state.consecutiveWeeks} tuần',
+                          ? '${state.consecutiveDays}'
+                          : '${state.consecutiveDays} ngày',
                       style: AppTypography.caption.copyWith(
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink,
@@ -350,7 +345,9 @@ class _HomeShellState extends State<HomeShell> {
           ),
           child: SafeArea(
             top: false,
-            child: Column(
+            child: ListenableBuilder(
+              listenable: state,
+              builder: (_, _) => Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -383,25 +380,31 @@ class _HomeShellState extends State<HomeShell> {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          state.userName,
-                          style: AppTypography.titleLarge.copyWith(
-                            fontWeight: FontWeight.w700,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            state.userName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.titleLarge.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          state.userEmail.isEmpty
-                              ? 'Tài khoản khách'
-                              : state.userEmail,
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textMuted,
+                          const SizedBox(height: 2),
+                          Text(
+                            state.userEmail.isEmpty
+                                ? 'Tài khoản khách'
+                                : state.userEmail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -432,13 +435,13 @@ class _HomeShellState extends State<HomeShell> {
                       Column(
                         children: [
                           Text(
-                            '${state.consecutiveWeeks} tuần',
+                            '${state.consecutiveDays}',
                             style: AppTypography.titleLarge.copyWith(
                               fontWeight: FontWeight.w800,
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text('Kiên trì', style: AppTypography.caption),
+                          Text('Ngày liên tiếp', style: AppTypography.caption),
                         ],
                       ),
                       Container(height: 28, width: 1, color: AppColors.line),
@@ -458,11 +461,33 @@ class _HomeShellState extends State<HomeShell> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 10),
+                Text(
+                  'Tuần này ${state.checkinDaysThisWeek}/7 ngày · ${state.exercisesCompleted} bài tập',
+                  style: AppTypography.caption,
+                ),
                 const SizedBox(height: 18),
                 Material(
                   color: Colors.transparent,
                   child: Column(
                     children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(
+                          Icons.edit_outlined,
+                          color: AppColors.ink,
+                        ),
+                        title: Text(
+                          'Sửa tên hiển thị',
+                          style: AppTypography.bodyMedium,
+                        ),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                        ),
+                        onTap: () => _editDisplayName(context, state),
+                      ),
+                      const Divider(height: 1),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(
@@ -516,11 +541,24 @@ class _HomeShellState extends State<HomeShell> {
                           color: AppColors.ink,
                         ),
                         title: Text(
-                          'Về Mindra',
+                          'Về Moodi',
                           style: AppTypography.bodyMedium,
                         ),
                         trailing: Text('v1.0.0', style: AppTypography.caption),
-                        onTap: () => Navigator.pop(modalCtx),
+                        onTap: () {
+                          Navigator.pop(modalCtx);
+                          showAboutDialog(
+                            context: context,
+                            applicationName: 'Moodi',
+                            applicationVersion: '1.0.0',
+                            children: [
+                              Text(
+                                'Một khoảng nhỏ để gọi tên cảm xúc, nhìn lại và chọn cách phản hồi. Moodi là công cụ tự phản tư, không chẩn đoán và không thay thế hỗ trợ chuyên môn.',
+                                style: AppTypography.bodySmall,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const Divider(height: 1),
                       ListTile(
@@ -552,10 +590,31 @@ class _HomeShellState extends State<HomeShell> {
                 const SizedBox(height: 12),
               ],
             ),
+            ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _editDisplayName(BuildContext context, MindraState state) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _DisplayNameDialog(initial: state.userName),
+    );
+    if (name == null || name.isEmpty || !context.mounted) return;
+    try {
+      await state.updateDisplayName(name);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e is StateError ? e.message : 'Chưa lưu được tên. Hãy thử lại.',
+          ),
+        ),
+      );
+    }
   }
 
   void _showLogoutDialog(BuildContext context, MindraState state) {
@@ -565,13 +624,15 @@ class _HomeShellState extends State<HomeShell> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(
-          'Đăng xuất khỏi Mindra?',
+          state.isGuest ? 'Thoát chế độ khách?' : 'Đăng xuất khỏi Moodi?',
           style: AppTypography.titleMedium.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
-          'Bạn sẽ cần đăng nhập lại để truy cập không gian cá nhân và các tính năng đồng bộ.',
+          state.isGuest
+              ? 'Bạn đang dùng chế độ khách. Nếu đăng xuất, toàn bộ ghi chép và khu vườn sẽ mất vĩnh viễn, không thể khôi phục.'
+              : 'Bạn sẽ cần đăng nhập lại để truy cập không gian cá nhân và các tính năng đồng bộ.',
           style: AppTypography.bodySmall,
         ),
         actions: [
@@ -594,7 +655,7 @@ class _HomeShellState extends State<HomeShell> {
               Navigator.pop(ctx);
               unawaited(state.logout());
             },
-            child: const Text('Đăng xuất'),
+            child: Text(state.isGuest ? 'Vẫn đăng xuất' : 'Đăng xuất'),
           ),
         ],
       ),
@@ -606,6 +667,7 @@ class _HomeShellState extends State<HomeShell> {
     MindraState state,
   ) async {
     final prevCount = state.entries.length;
+    var openedJournal = false;
     MindraMotion.of(state.lowStimulationMode).light();
     await showModalBottomSheet<void>(
       context: context,
@@ -664,8 +726,9 @@ class _HomeShellState extends State<HomeShell> {
                       state: state,
                       onClose: () => Navigator.pop(modalCtx),
                       onOpenJournal: () {
+                        openedJournal = true;
                         Navigator.pop(modalCtx);
-                        state.setTab(1); // Calendar tab
+                        state.openJournal();
                       },
                     ),
                   ),
@@ -678,16 +741,21 @@ class _HomeShellState extends State<HomeShell> {
     );
 
     if (!context.mounted) return;
-    if (state.entries.length > prevCount) {
+    // Skip when the user moved on: AI reflection pushed on top, or they asked
+    // for the journal (CheckinView's snackbar still offers planting there).
+    final isOnTop = ModalRoute.of(context)?.isCurrent ?? true;
+    if (state.entries.length > prevCount && isOnTop && !openedJournal) {
       _showPlantingCelebration(context, state);
     }
   }
 
   void _showPlantingCelebration(BuildContext context, MindraState state) {
-    final latestEntry = state.entries.isNotEmpty ? state.entries.first : null;
-    final emotion = latestEntry != null
-        ? MindraEmotions.get(latestEntry.emotionKey)
-        : state.selectedEmotion;
+    final latestEntry = state.entries.first;
+    final emotion = MindraEmotions.get(latestEntry.emotionKey);
+    final messenger = ScaffoldMessenger.of(context);
+    // This sheet carries the "keep in garden" choice; the snackbar
+    // version would sit hidden underneath it.
+    messenger.hideCurrentSnackBar();
 
     showModalBottomSheet<void>(
       context: context,
@@ -725,7 +793,7 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Đã gieo một hạt mầm bình yên',
+                  'Đã lưu check-in',
                   style: AppTypography.titleLarge.copyWith(
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
@@ -733,11 +801,19 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Cảm xúc "${emotion.vi}" đã được ôm ấp và giữ lại trong Khu vườn tháng ${DateTime.now().month}. Cảm ơn bạn vì đã dành thời gian cho chính mình.',
+                  'Cảm ơn bạn đã dành một nhịp cho chính mình. Bạn có muốn giữ khoảnh khắc "${emotion.vi}" thành một bông hoa trong Khu vườn tháng ${latestEntry.timestamp.month}?',
                   textAlign: TextAlign.center,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                     height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  state.entrySaveMessage(latestEntry.id),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textMuted,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -754,15 +830,39 @@ class _HomeShellState extends State<HomeShell> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: const Text('Đóng'),
+                        child: const Text('Để sau'),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(ctx);
-                          state.setTab(2); // Go to Garden tab
+                          try {
+                            await state.plantMoment(latestEntry.id);
+                            if (!messenger.mounted) return;
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: const Text(
+                                  'Khoảnh khắc đã được giữ lại.',
+                                ),
+                                duration: const Duration(seconds: 3),
+                                action: SnackBarAction(
+                                  label: 'Xem vườn',
+                                  onPressed: () => state.openGarden(),
+                                ),
+                              ),
+                            );
+                          } catch (_) {
+                            if (!messenger.mounted) return;
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Chưa giữ được khoảnh khắc. Bạn có thể thử lại trong Khu vườn.',
+                                ),
+                              ),
+                            );
+                          }
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(0, 48),
@@ -775,7 +875,7 @@ class _HomeShellState extends State<HomeShell> {
                         ),
                         icon: const Text('🌸', style: TextStyle(fontSize: 16)),
                         label: const Text(
-                          'Xem khu vườn',
+                          'Giữ trong vườn',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -797,99 +897,17 @@ class _HomeShellState extends State<HomeShell> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (modalCtx) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.90,
-          decoration: const BoxDecoration(
-            color: AppColors.paper,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 42,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: AppColors.ink.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 14, 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.mint.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.pause_circle_filled_rounded,
-                                  size: 16,
-                                  color: AppColors.ink,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Khoảng nghỉ',
-                                  style: AppTypography.caption.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.ink,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Dừng lại 30s',
-                            style: AppTypography.titleMedium.copyWith(
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          size: 22,
-                          color: AppColors.ink,
-                        ),
-                        onPressed: () => Navigator.pop(modalCtx),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: AppColors.line),
-                Expanded(
-                  child: PauseModeSheet(
-                    state: state,
-                    onClose: () => Navigator.pop(modalCtx),
-                    onOpenFullCheckin: () {
-                      Navigator.pop(modalCtx);
-                      _openCheckinModal(context, state);
-                    },
-                    onOpenPractice: () {
-                      Navigator.pop(modalCtx);
-                      _openPracticePage(state);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return PauseModeSheet(
+          state: state,
+          onClose: () => Navigator.pop(modalCtx),
+          onOpenFullCheckin: () {
+            Navigator.pop(modalCtx);
+            _openCheckinModal(context, state);
+          },
+          onOpenPractice: () {
+            Navigator.pop(modalCtx);
+            _openPracticePage(state);
+          },
         );
       },
     );
@@ -923,20 +941,19 @@ class _HomeShellState extends State<HomeShell> {
         return TodayView(
           state: state,
           onOpenCheckin: () => _openCheckinModal(context, state),
-          onOpenJournal: () => state.setTab(1),
+          onOpenJournal: () => state.openJournal(),
           onOpenPause: () => _openPauseModeModal(context, state),
           onOpenPractice: () => _openPracticePage(state),
-          onOpenGarden: () => state.setTab(2),
+          onOpenGarden: () => state.openGarden(),
         );
-      case 1:
-        return JournalView(state: state);
-      case 2:
-        return GardenView(
+      case 1: // Góc riêng (Nhật ký + Khu vườn)
+        return PersonalSpaceView(
           state: state,
           onOpenCheckin: () => _openCheckinModal(context, state),
-          onOpenJournal: () => state.setTab(1),
         );
-      case 3:
+      case 2: // Cộng đồng
+        return CommunityView(state: state);
+      case 3: // Khám phá
         return ExploreView(
           state: state,
           onOpenCheckin: () => _openCheckinModal(context, state),
@@ -945,10 +962,10 @@ class _HomeShellState extends State<HomeShell> {
         return TodayView(
           state: state,
           onOpenCheckin: () => _openCheckinModal(context, state),
-          onOpenJournal: () => state.setTab(1),
+          onOpenJournal: () => state.openJournal(),
           onOpenPause: () => _openPauseModeModal(context, state),
           onOpenPractice: () => _openPracticePage(state),
-          onOpenGarden: () => state.setTab(2),
+          onOpenGarden: () => state.openGarden(),
         );
     }
   }
@@ -963,8 +980,8 @@ class _HomeShellState extends State<HomeShell> {
     final navContentHeight = textScale > 1 ? 52 + 16 * (textScale - 1) : 52.0;
     final items = [
       (icon: CupertinoIcons.house, label: 'Hôm nay'),
-      (icon: CupertinoIcons.book, label: 'Nhật ký'),
-      (icon: Icons.local_florist_outlined, label: 'Khu vườn'),
+      (icon: Icons.spa_outlined, label: 'Góc riêng'),
+      (icon: Icons.forum_outlined, label: 'Cộng đồng'),
       (icon: CupertinoIcons.compass, label: 'Khám phá'),
     ];
 
@@ -1071,6 +1088,50 @@ class _HomeShellState extends State<HomeShell> {
         padding: padding,
         child: Center(widthFactor: 1.0, child: child),
       ),
+    );
+  }
+}
+
+class _DisplayNameDialog extends StatefulWidget {
+  const _DisplayNameDialog({required this.initial});
+  final String initial;
+
+  @override
+  State<_DisplayNameDialog> createState() => _DisplayNameDialogState();
+}
+
+class _DisplayNameDialogState extends State<_DisplayNameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.pop(context, _controller.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Tên hiển thị'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 100,
+        textCapitalization: TextCapitalization.words,
+        decoration: const InputDecoration(hintText: 'Tên mọi người thấy'),
+        onSubmitted: (_) => _save(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Hủy'),
+        ),
+        ElevatedButton(onPressed: _save, child: const Text('Lưu')),
+      ],
     );
   }
 }

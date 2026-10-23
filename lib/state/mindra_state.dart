@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
+import '../repositories/post_repository.dart';
+
 import 'package:flutter/foundation.dart';
 
 import '../core/garden_layout.dart';
@@ -16,6 +17,7 @@ import '../repositories/garden_repository.dart';
 import '../repositories/journal_repository.dart';
 import '../repositories/reflection_repository.dart';
 import '../repositories/shared_garden_repository.dart';
+import '../repositories/user_repository.dart';
 
 enum EntrySyncStatus { pending, synced, failed, sessionOnly }
 
@@ -27,8 +29,9 @@ class MindraState extends ChangeNotifier {
   final GardenRepository _gardenRepository;
   final ReflectionRepository _reflectionRepository;
   final SharedGardenRepository _sharedGardenRepository;
+  final UserRepository _userRepository;
 
-  StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<AuthUser?>? _authSubscription;
   StreamSubscription<List<JournalEntry>>? _entriesSubscription;
   StreamSubscription<List<GardenMoment>>? _gardenSubscription;
   StreamSubscription<SharedGarden?>? _sharedGardenSubscription;
@@ -56,6 +59,7 @@ class MindraState extends ChangeNotifier {
     GardenRepository? gardenRepository,
     ReflectionRepository? reflectionRepository,
     SharedGardenRepository? sharedGardenRepository,
+    UserRepository? userRepository,
     List<JournalEntry>? initialEntries,
     List<MicroGoal>? initialMicroGoals,
     bool? isAuthenticated,
@@ -63,8 +67,9 @@ class MindraState extends ChangeNotifier {
        _journalRepository = journalRepository ?? JournalRepository(),
        _gardenRepository = gardenRepository ?? GardenRepository(),
        _reflectionRepository = reflectionRepository ?? ReflectionRepository(),
-       _sharedGardenRepository =
-           sharedGardenRepository ?? SharedGardenRepository() {
+        _sharedGardenRepository =
+            sharedGardenRepository ?? SharedGardenRepository(),
+        _userRepository = userRepository ?? UserRepository() {
     if (initialEntries != null && initialEntries.isNotEmpty) {
       _entries.addAll(initialEntries);
       final entry = _entryForDay(DateTime.now());
@@ -74,15 +79,14 @@ class MindraState extends ChangeNotifier {
       _onboardingCompleted = true;
       _userEmail = 'ban@mindra.app';
     } else {
-      // 100% REAL DATA MODE: Bỏ toàn bộ mock data, đồng bộ trực tiếp với Firebase
+      // 100% REAL DATA MODE: Bỏ toàn bộ mock data, đồng bộ trực tiếp với API
       final user = _authRepository.currentUser;
       if (user != null) {
         _isAuthenticated = isAuthenticated ?? true;
         _onboardingCompleted = true;
-        _userEmail =
-            user.email ?? (user.isAnonymous ? 'Khách ẩn danh' : 'Người dùng');
+        _userEmail = user.email;
         _userName = user.displayName ?? '';
-        _startFirestoreListeners(user.uid);
+        _startApiListeners(user.id);
       } else {
         _isAuthenticated = isAuthenticated ?? false;
         _onboardingCompleted = false;
@@ -90,14 +94,26 @@ class MindraState extends ChangeNotifier {
         _userName = '';
       }
 
-      // Lắng nghe thay đổi trạng thái đăng nhập Firebase trong suốt phiên dùng
+      // Lắng nghe thay đổi trạng thái đăng nhập API trong suốt phiên dùng
       _authSubscription = _authRepository.authStateChanges.listen((u) {
+        if (_disposed) return;
+        _sessionRevision++;
+        _entriesSubscription?.cancel();
+        _gardenSubscription?.cancel();
+        _clearSharedSession();
+        _entries.clear();
+        _gardenMoments.clear();
+        _aiReflections.clear();
+        _weeklyReview = null;
+        _posts.clear();
+        _microGoals.clear();
+        _entrySync.clear();
+        _entryWriteVersions.clear();
         if (u != null) {
           _isAuthenticated = true;
-          _userEmail =
-              u.email ?? (u.isAnonymous ? 'Khách ẩn danh' : 'Người dùng');
+          _userEmail = u.email;
           _userName = u.displayName ?? '';
-          _startFirestoreListeners(u.uid);
+          _startApiListeners(u.id);
           notifyListeners();
         } else {
           _clearSharedSession();
@@ -114,11 +130,193 @@ class MindraState extends ChangeNotifier {
           notifyListeners();
         }
       });
+      if (user == null && isAuthenticated == null) _restoreSession();
     }
 
     if (initialMicroGoals != null && initialMicroGoals.isNotEmpty) {
       _microGoals.addAll(initialMicroGoals);
     }
+  }
+
+  bool _hasChosenEmotion = false;
+  bool get hasChosenEmotion => _hasChosenEmotion;
+  bool get isGuest => _authRepository.currentUser?.isAnonymous ?? false;
+  int _personalSpaceSection = 0;
+  int get personalSpaceSection => _personalSpaceSection;
+  void setPersonalSpaceSection(int section) {
+    _personalSpaceSection = section.clamp(0, 1);
+    notifyListeners();
+  }
+
+  void openJournal() {
+    _personalSpaceSection = 0;
+    setTab(1);
+    notifyListeners();
+  }
+
+  // Tháng mà khu vườn cần hiển thị khi được mở; seq tăng mỗi lần yêu cầu để
+  // GardenView vẫn nhảy tháng dù cùng monthKey được yêu cầu lần nữa.
+  String? _gardenFocusMonthKey;
+  String? get gardenFocusMonthKey => _gardenFocusMonthKey;
+  int _gardenFocusSeq = 0;
+  int get gardenFocusSeq => _gardenFocusSeq;
+
+  void openGarden({String? monthKey}) {
+    _personalSpaceSection = 1;
+    _gardenFocusMonthKey = monthKey;
+    _gardenFocusSeq++;
+    setTab(1);
+    notifyListeners();
+  }
+
+  final _postRepository = PostRepository();
+  List<Post> _posts = [];
+  List<Post> get posts => List.unmodifiable(_posts);
+  Future<void> fetchPosts() async {
+    final revision = _sessionRevision;
+    final page = await _postRepository.getPosts();
+    if (_disposed || revision != _sessionRevision) return;
+    if (page != null) {
+      _posts = page.data;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createPost(String content, List<String>? images) async {
+    final result = await _postRepository.createPost(
+      content: content,
+      imageUrls: images,
+    );
+    if (result == null) throw StateError('Không thể đăng bài.');
+    await fetchPosts();
+  }
+
+  Future<void> likePost(String id) async {
+    if (!await _postRepository.likePost(id)) {
+      throw StateError('Không thể đồng cảm.');
+    }
+    await fetchPosts();
+  }
+
+  bool _isDemoSharedGarden = false;
+  bool get isDemoSharedGarden => _isDemoSharedGarden;
+  String get sharedDisplayNameSuggestion =>
+      _userName.isEmpty ? 'Bạn' : _userName;
+  bool isSharedPlanted(String entryId) =>
+      _sharedMoments.any((m) => m.id == '${currentUserId}_$entryId');
+  Future<void> removeSharedMoment(String momentId) async {
+    _requireUserId();
+    final garden = _sharedGarden;
+    if (garden == null) throw StateError('Hãy chọn một khu vườn.');
+    final revision = _sessionRevision;
+    await _sharedGardenRepository.removeMoment(garden.id, momentId);
+    if (_disposed || revision != _sessionRevision) return;
+    _sharedMoments.removeWhere((m) => m.id == momentId);
+    notifyListeners();
+  }
+
+  // Đang đổi refresh token đã lưu trong Keychain/Keystore lấy phiên mới.
+  bool _restoringSession = false;
+  bool get isRestoringSession => _restoringSession;
+
+  Future<void> _restoreSession() async {
+    _restoringSession = true;
+    try {
+      final restored = await _authRepository.restoreSession();
+      if (restored && !_disposed) _onboardingCompleted = true;
+    } catch (e) {
+      debugPrint('MindraState: restoreSession failed ($e)');
+    } finally {
+      _restoringSession = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  ({bool google, bool apple})? _socialProviders;
+  ({bool google, bool apple}) get socialProviders =>
+      _socialProviders ?? (google: false, apple: false);
+
+  /// Hiện nút Google/Apple chỉ khi cả app lẫn server đã cấu hình.
+  Future<void> loadSocialProviders() async {
+    final social = _authRepository.socialSignIn;
+    final server = await _authRepository.socialProviders();
+    final apple = server.apple && await social.appleAvailable();
+    if (_disposed) return;
+    _socialProviders = (
+      google: server.google && social.googleConfigured,
+      apple: apple,
+    );
+    notifyListeners();
+  }
+
+  Future<void> signInWithGoogle() =>
+      _socialLogin(_authRepository.signInWithGoogle);
+
+  Future<void> signInWithApple() =>
+      _socialLogin(_authRepository.signInWithApple);
+
+  Future<void> _socialLogin(Future<AuthResponse?> Function() signIn) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      // null = người dùng huỷ, không phải lỗi.
+      await signIn();
+    } finally {
+      _isLoading = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  int _sessionRevision = 0;
+  int get sessionRevision => _sessionRevision;
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  Future<void> login(String email, String password) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final result = await _authRepository.signInWithEmailPassword(
+        email,
+        password,
+      );
+      if (result == null) throw StateError('Không thể đăng nhập.');
+    } finally {
+      _isLoading = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> register(
+    String email,
+    String password,
+    String displayName,
+  ) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final result = await _authRepository.registerWithEmailPassword(
+        email,
+        password,
+        displayName: displayName,
+      );
+      if (result == null) throw StateError('Không thể tạo tài khoản.');
+    } finally {
+      _isLoading = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> deleteAllUserData() async {
+    await Future.wait(List.of(_pendingWrites));
+    final uid = _requireUserId();
+    final revision = _sessionRevision;
+    if (_sharedGarden != null) {
+      await _sharedGardenRepository.removeMyMoments(_sharedGarden!.id);
+    }
+    await _journalRepository.deleteAllEntries(userId: uid);
+    await _gardenRepository.deleteAllMoments(userId: uid);
+    if (!_disposed && revision == _sessionRevision) clearAllData();
   }
 
   AuthRepository get authRepository => _authRepository;
@@ -167,6 +365,31 @@ class MindraState extends ChangeNotifier {
       _entries.where((entry) => entry.exerciseDone).length;
 
   JournalEntry? get todayEntry => _entryForDay(DateTime.now());
+
+  int get consecutiveDays {
+    final days = _entries
+        .map(
+          (entry) => DateTime(
+            entry.timestamp.year,
+            entry.timestamp.month,
+            entry.timestamp.day,
+          ),
+        )
+        .toSet();
+    if (days.isEmpty) return 0;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var cursor = days.contains(today)
+        ? today
+        : today.subtract(const Duration(days: 1));
+    if (!days.contains(cursor)) return 0;
+    var count = 0;
+    while (days.contains(cursor)) {
+      count++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return count;
+  }
 
   int get consecutiveWeeks {
     final now = DateTime.now();
@@ -297,6 +520,7 @@ class MindraState extends ChangeNotifier {
   }
 
   void selectEmotion(String key) {
+    _hasChosenEmotion = true;
     if (_selectedEmotionKey != key) {
       _selectedEmotionKey = key;
       notifyListeners();
@@ -318,6 +542,10 @@ class MindraState extends ChangeNotifier {
   final Map<String, EntrySyncStatus> _entrySync = {};
   final Map<String, int> _entryWriteVersions = {};
   int _entryWriteSequence = 0;
+  final Set<Future<void>> _pendingWrites = {};
+  // Lệnh ghi đang chạy theo từng entry, để removeEntry chờ chúng xong trước
+  // khi xóa — nếu không, lệnh save tới server sau lệnh delete sẽ hồi sinh entry.
+  final Map<String, Set<Future<void>>> _pendingEntryWrites = {};
   EntrySyncStatus entrySyncStatus(String id) =>
       _entrySync[id] ?? EntrySyncStatus.synced;
   int get pendingEntryCount =>
@@ -357,7 +585,17 @@ class MindraState extends ChangeNotifier {
         : EntrySyncStatus.pending;
     notifyListeners();
     if (uid == null) return;
-    unawaited(_writeEntry(entry, uid, version));
+    final write = _writeEntry(entry, uid, version);
+    _pendingWrites.add(write);
+    final entryWrites = _pendingEntryWrites.putIfAbsent(entry.id, () => {})
+      ..add(write);
+    unawaited(
+      write.whenComplete(() {
+        _pendingWrites.remove(write);
+        entryWrites.remove(write);
+        if (entryWrites.isEmpty) _pendingEntryWrites.remove(entry.id);
+      }),
+    );
   }
 
   Future<void> _writeEntry(JournalEntry entry, String uid, int version) async {
@@ -388,7 +626,12 @@ class MindraState extends ChangeNotifier {
 
   Future<void> removeEntry(String id) async {
     final uid = _authRepository.currentUserId;
-    if (uid != null) await _journalRepository.deleteEntry(id, userId: uid);
+    final pending = _pendingEntryWrites[id];
+    if (pending != null) await Future.wait(List.of(pending));
+    if (uid != null) {
+      if (isSharedPlanted(id)) await removeSharedMoment('${uid}_$id');
+      await _journalRepository.deleteEntry(id, userId: uid);
+    }
     if (_disposed || _authRepository.currentUserId != uid) return;
     _entrySync.remove(id);
     _entryWriteVersions.remove(id);
@@ -606,7 +849,7 @@ class MindraState extends ChangeNotifier {
         .signInAnonymously()
         .then((cred) {
           if (_disposed) return;
-          final newUid = cred?.user?.uid;
+          final newUid = cred?.user.id;
           if (newUid != null) {
             _listeningUserId = null;
             _watchUserGarden(newUid);
@@ -628,6 +871,7 @@ class MindraState extends ChangeNotifier {
   }
 
   void loadDemoSharedGarden() {
+    _isDemoSharedGarden = true;
     _sharedGardenError = null;
     _sharedGardenLoading = false;
     final myId = _authRepository.currentUserId ?? 'current_user';
@@ -636,7 +880,7 @@ class MindraState extends ChangeNotifier {
       id: 'demo-shared-garden',
       code: 'MINDRA-DEMO',
       name: 'Vườn sẻ chia mẫu',
-      members: ['demo_user_1', 'demo_user_2', myId],
+      members: ['demo_user_1', myId],
       memberNames: {
         'demo_user_1': 'An Nhiên',
         'demo_user_2': 'Minh Khang',
@@ -666,8 +910,8 @@ class MindraState extends ChangeNotifier {
       SharedMoment(
         id: 'shared-moment-demo-2',
         gardenId: 'demo-shared-garden',
-        authorId: 'demo_user_2',
-        authorName: 'Minh Khang',
+        authorId: myId,
+        authorName: myName,
         emotionKey: 'happy',
         intensity: 5,
         caption: 'Hoàn thành bài thuyết trình đồ án liên ngành suôn sẻ!',
@@ -710,16 +954,20 @@ class MindraState extends ChangeNotifier {
   }
 
   String _requireUserId() {
+    if (_isDemoSharedGarden) throw StateError('Không thể ghi vào vườn mẫu.');
     final uid = _authRepository.currentUserId;
     if (uid == null) throw StateError('Hãy đăng nhập để sử dụng vườn chung.');
     return uid;
   }
 
-  Future<SharedGarden> createSharedGarden({String? gardenName}) async {
+  Future<SharedGarden> createSharedGarden({
+    String? gardenName,
+    String? displayName,
+  }) async {
     final uid = _requireUserId();
     final garden = await _sharedGardenRepository.createGarden(
       userId: uid,
-      userName: _userName,
+      userName: displayName ?? sharedDisplayNameSuggestion,
       gardenName: gardenName,
     );
     if (!_disposed && _authRepository.currentUserId == uid) {
@@ -728,12 +976,12 @@ class MindraState extends ChangeNotifier {
     return garden;
   }
 
-  Future<bool> joinSharedGarden(String code) async {
+  Future<bool> joinSharedGarden(String code, {String? displayName}) async {
     final uid = _requireUserId();
     final garden = await _sharedGardenRepository.joinGardenByCode(
       code: code,
       userId: uid,
-      userName: _userName,
+      userName: displayName ?? sharedDisplayNameSuggestion,
     );
     if (garden == null) return false;
     if (!_disposed && _authRepository.currentUserId == uid) {
@@ -790,10 +1038,18 @@ class MindraState extends ChangeNotifier {
     return _sharedGardenRepository.refreshInvite(gardenId);
   }
 
-  Future<void> leaveSharedGarden() async {
+  Future<void> leaveSharedGarden({bool removeMyFlowers = false}) async {
+    if (_isDemoSharedGarden) {
+      _isDemoSharedGarden = false;
+      _setSharedGarden(null);
+      return;
+    }
     final uid = _requireUserId();
     final gardenId = _sharedGarden?.id;
     if (gardenId == null) return;
+    if (removeMyFlowers) {
+      await _sharedGardenRepository.removeMyMoments(gardenId);
+    }
     await _sharedGardenRepository.leaveGarden(gardenId);
     if (!_disposed &&
         _authRepository.currentUserId == uid &&
@@ -1080,7 +1336,26 @@ class MindraState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateDisplayName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 100) {
+      throw StateError('Tên cần từ 1 đến 100 ký tự.');
+    }
+    final id = currentUserId;
+    if (id == null) throw StateError('Hãy đăng nhập để sửa hồ sơ.');
+    final updated = await _userRepository.updateProfile(
+      userId: id,
+      displayName: trimmed,
+    );
+    if (updated == null) throw StateError('Chưa lưu được tên.');
+    _userName = updated.displayName.trim().isEmpty
+        ? trimmed
+        : updated.displayName.trim();
+    notifyListeners();
+  }
+
   Future<void> logout() async {
+    await authRepository.signOut();
     _clearSharedSession();
     _entriesSubscription?.cancel();
     _gardenSubscription?.cancel();
@@ -1088,8 +1363,9 @@ class MindraState extends ChangeNotifier {
     _sharedMomentsSubscription?.cancel();
     _sharedGarden = null;
     _sharedMoments.clear();
-    // Sign out từ Firebase (fire-and-forget nếu lỗi)
-    await authRepository.signOut();
+    _aiReflections.clear();
+    _weeklyReview = null;
+    _sessionRevision++;
     _isAuthenticated = false;
     _onboardingCompleted = true;
     _demoScenario = DemoScenario.firstLaunch;
@@ -1152,18 +1428,24 @@ class MindraState extends ChangeNotifier {
   Future<AIReflection> fetchOrGenerateAIReflection(JournalEntry entry) async {
     final cached = reflectionForEntry(entry.id);
     if (cached != null) return cached;
+    final revision = _sessionRevision;
     final generated = await _reflectionRepository.generateReflection(
       emotionKey: entry.emotionKey,
       intensity: entry.intensity,
       situation: entry.situation,
       thought: entry.thought,
+      entryId: entry.id,
     );
+    if (_disposed || revision != _sessionRevision) {
+      throw StateError('Phiên đăng nhập đã thay đổi.');
+    }
     cacheAIReflection(entry.id, generated);
     notifyListeners();
     return generated;
   }
 
-  void _startFirestoreListeners(String userId) {
+  void _startApiListeners(String userId) {
+    _sharedGardenRepository.setCurrentUserId(userId);
     _watchUserGarden(userId);
     _entriesSubscription?.cancel();
     _gardenSubscription?.cancel();
@@ -1195,6 +1477,7 @@ class MindraState extends ChangeNotifier {
         .watchMoments(userId: userId)
         .listen(
           (remoteMoments) {
+            if (_disposed || currentUserId != userId) return;
             _gardenMoments
               ..clear()
               ..addAll(remoteMoments);
@@ -1219,7 +1502,8 @@ class MindraState extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> syncFromFirestore() async {
+  Future<void> syncFromApi() async {
+    final revision = _sessionRevision;
     final uid = _authRepository.currentUserId;
     if (uid == null) return;
     try {
@@ -1235,6 +1519,7 @@ class MindraState extends ChangeNotifier {
         ..addAll(unsynced)
         ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
       final remoteMoments = await _gardenRepository.fetchMoments(userId: uid);
+      if (_disposed || revision != _sessionRevision) return;
       if (remoteMoments.isNotEmpty) {
         _gardenMoments
           ..clear()
@@ -1242,7 +1527,7 @@ class MindraState extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
-      debugPrint('MindraState: Error in syncFromFirestore ($e)');
+      debugPrint('MindraState: Error in syncFromApi ($e)');
     }
   }
 }

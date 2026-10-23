@@ -1,20 +1,16 @@
-import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+import '../core/http_client.dart';
 import '../core/theme/colors.dart';
 import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
-
-import 'package:flutter_svg/flutter_svg.dart';
-
 import 'home_shell.dart';
 
 // ─────────────────────────────────────────
-// Entry: Auth Gate — nếu Firebase Auth có session thì vào app luôn
+// Entry: Auth Gate — Check if user is authenticated
 // ─────────────────────────────────────────
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -27,17 +23,18 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    _tryAutoLogin();
+    _checkAuth();
   }
 
-  Future<void> _tryAutoLogin() async {
-    // Lắng nghe trạng thái đăng nhập từ Firebase
+  Future<void> _checkAuth() async {
     final state = context.read<MindraState>();
-    final currentUser = state.authRepository.currentUser;
-    if (currentUser != null && mounted) {
-      state.authenticate(currentUser.email, currentUser.displayName);
-      // Sync dữ liệu từ Firestore về
-      unawaited(state.syncFromFirestore());
+    // Check if user is already authenticated
+    if (state.isAuthenticated && mounted) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/home');
+        }
+      });
     }
   }
 
@@ -89,6 +86,7 @@ class _LoginViewState extends State<LoginView>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut));
     _slideCtrl.forward();
+    context.read<MindraState>().loadSocialProviders();
   }
 
   @override
@@ -121,131 +119,71 @@ class _LoginViewState extends State<LoginView>
 
     final state = context.read<MindraState>();
     final email = _emailCtrl.text.trim();
-    final pass = _passCtrl.text.trim();
+    final pass = _passCtrl.text;
 
     try {
+      // MindraApp chuyển sang Home khi luồng đăng nhập phát user mới.
       if (_isRegisterMode) {
-        await state.authRepository.registerWithEmailPassword(email, pass);
+        await state.register(email, pass, email.split('@').first);
       } else {
-        await state.authRepository.signInWithEmailPassword(email, pass);
+        await state.login(email, pass);
       }
-      if (!mounted) return;
-      state.authenticate(email);
-      // Sync Firestore sau khi login
-      unawaited(state.syncFromFirestore());
       HapticFeedback.mediumImpact();
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = _mapFirebaseError(e.code);
-      });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Có lỗi xảy ra. Vui lòng thử lại.';
-      });
+      setState(() => _errorMessage = _mapAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _signInWithGoogle() async {
+  Future<void> _signInWithGoogle() => _socialSignIn(
+    context.read<MindraState>().signInWithGoogle,
+    'Không thể kết nối tài khoản Google. Vui lòng thử lại.',
+  );
+
+  Future<void> _signInWithApple() => _socialSignIn(
+    context.read<MindraState>().signInWithApple,
+    'Không thể kết nối tài khoản Apple. Vui lòng thử lại.',
+  );
+
+  Future<void> _socialSignIn(
+    Future<void> Function() signIn,
+    String fallbackMessage,
+  ) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     HapticFeedback.lightImpact();
-
-    final state = context.read<MindraState>();
     try {
-      final cred = await state.authRepository.signInWithGoogle();
-      if (!mounted) return;
-      if (cred == null) return;
-      state.authenticate(cred.user?.email, cred.user?.displayName);
-      unawaited(state.syncFromFirestore());
-      HapticFeedback.mediumImpact();
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = _mapFirebaseError(e.code);
-      });
+      await signIn();
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Không thể kết nối tài khoản Google. Vui lòng thử lại.';
-      });
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _signInWithApple() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-    HapticFeedback.lightImpact();
-
-    final state = context.read<MindraState>();
-    try {
-      final cred = await state.authRepository.signInWithApple();
-      if (!mounted) return;
-      if (cred == null) return;
-      state.authenticate(cred.user?.email, cred.user?.displayName);
-      unawaited(state.syncFromFirestore());
-      HapticFeedback.mediumImpact();
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = _mapFirebaseError(e.code);
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Không thể kết nối tài khoản Apple. Vui lòng thử lại.';
-      });
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _continueWithoutAccount() async {
-    setState(() => _isLoading = true);
-    HapticFeedback.lightImpact();
-    final state = context.read<MindraState>();
-    try {
-      final credential = await state.authRepository.signInAnonymously();
-      if (credential?.user == null) throw StateError('guest-sign-in-failed');
-      if (!mounted) return;
-      state.authenticate();
-    } catch (_) {
       if (!mounted) return;
       setState(
-        () => _errorMessage =
-            'Chưa mở được phiên khách. Kiểm tra kết nối và thử lại.',
+        () => _errorMessage = e is ApiException
+            ? _mapAuthError(e)
+            : fallbackMessage,
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _mapFirebaseError(String code) {
-    return switch (code) {
-      'user-not-found' => 'Không tìm thấy tài khoản với email này.',
-      'wrong-password' => 'Mật khẩu không đúng. Vui lòng thử lại.',
-      'invalid-email' => 'Email không hợp lệ.',
-      'email-already-in-use' => 'Email này đã được đăng ký. Hãy đăng nhập.',
-      'weak-password' => 'Mật khẩu quá yếu. Cần ít nhất 6 ký tự.',
-      'network-request-failed' => 'Không thể kết nối dịch vụ đăng nhập. Kiểm tra kết nối mạng và thử lại.',
-      'too-many-requests' =>
-        'Quá nhiều lần thử. Vui lòng đợi một lúc rồi thử lại.',
-      'invalid-credential' => 'Email hoặc mật khẩu không đúng.',
-      'popup-closed-by-user' => 'Cửa sổ đăng nhập đã đóng trước khi hoàn tất.',
-      'canceled' => 'Đã hủy đăng nhập.',
-      'account-exists-with-different-credential' =>
-        'Email này đã được dùng với một phương thức đăng nhập khác.',
-      'operation-not-allowed' =>
-        'Phương thức đăng nhập này chưa được bật trên Firebase Console.',
+  String _mapAuthError(Object error) {
+    if (error is! ApiException) {
+      return 'Có lỗi xảy ra. Vui lòng thử lại.';
+    }
+    return switch (error.statusCode) {
+      null || 408 => 'Không thể kết nối dịch vụ đăng nhập. Kiểm tra kết nối mạng và thử lại.',
+      401 => 'Email hoặc mật khẩu không đúng.',
+      429 => 'Quá nhiều lần thử. Vui lòng đợi một lúc rồi thử lại.',
+      503 => 'Phương thức đăng nhập này chưa được bật trên máy chủ.',
+      400 when error.message.contains('đã tồn tại') =>
+        'Email này đã được đăng ký. Hãy đăng nhập.',
+      400 when error.message.contains('password') =>
+        'Mật khẩu cần từ 8 ký tự trở lên.',
+      400 when error.message.contains('email') => 'Email không hợp lệ.',
       _ => 'Đăng nhập không thành công. Vui lòng thử lại.',
     };
   }
@@ -253,6 +191,7 @@ class _LoginViewState extends State<LoginView>
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
+    final social = context.watch<MindraState>().socialProviders;
     return Scaffold(
       backgroundColor: AppColors.paper,
       body: SafeArea(
@@ -296,17 +235,13 @@ class _LoginViewState extends State<LoginView>
                     const SizedBox(height: 16),
                     // ── Toggle Mode ──
                     _buildToggleMode(),
-                    // ── Divider ──
-                    const SizedBox(height: 24),
-                    _buildDivider(),
-                    const SizedBox(height: 20),
-                    // ── Google & Apple Sign-In ──
-                    _buildSocialButtons(),
-                    const SizedBox(height: 14),
-                    // ── Continue anonymously ──
-                    _buildAnonButton(),
-                    const SizedBox(height: 20),
-                    _buildAnonNote(),
+                    // ── Google & Apple: chỉ hiện khi app và server đã cấu hình ──
+                    if (social.google || social.apple) ...[
+                      const SizedBox(height: 24),
+                      _buildDivider(),
+                      const SizedBox(height: 20),
+                      _buildSocialButtons(social),
+                    ],
                   ],
                 ),
               ),
@@ -329,7 +264,7 @@ class _LoginViewState extends State<LoginView>
             borderRadius: BorderRadius.circular(100),
           ),
           child: Text(
-            'mindra ✦',
+            'moodi ✦',
             style: AppTypography.kicker.copyWith(
               color: AppColors.ink,
               letterSpacing: 1.2,
@@ -389,7 +324,9 @@ class _LoginViewState extends State<LoginView>
       ),
       validator: (v) {
         if (v == null || v.isEmpty) return 'Vui lòng nhập mật khẩu';
-        if (v.length < 6) return 'Mật khẩu cần ít nhất 6 ký tự';
+        if (_isRegisterMode && v.length < 8) {
+          return 'Mật khẩu cần ít nhất 8 ký tự';
+        }
         return null;
       },
     );
@@ -518,33 +455,37 @@ class _LoginViewState extends State<LoginView>
     );
   }
 
-  Widget _buildSocialButtons() {
+  Widget _buildSocialButtons(({bool google, bool apple}) social) {
     return Column(
       children: [
-        _buildSocialButton(
-          key: const ValueKey('btn-google-sign-in'),
-          label: _isRegisterMode
-              ? 'Đăng ký bằng Google'
-              : 'Tiếp tục với Google',
-          icon: SvgPicture.string(
-            '''<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+        if (social.google)
+          _buildSocialButton(
+            key: const ValueKey('btn-google-sign-in'),
+            label: _isRegisterMode
+                ? 'Đăng ký bằng Google'
+                : 'Tiếp tục với Google',
+            icon: SvgPicture.string(
+              '''<svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
 </svg>''',
-            width: 20,
-            height: 20,
+              width: 20,
+              height: 20,
+            ),
+            onPressed: _isLoading ? null : _signInWithGoogle,
           ),
-          onPressed: _isLoading ? null : _signInWithGoogle,
-        ),
-        const SizedBox(height: 10),
-        _buildSocialButton(
-          key: const ValueKey('btn-apple-sign-in'),
-          label: _isRegisterMode ? 'Đăng ký bằng Apple' : 'Tiếp tục với Apple',
-          icon: const Icon(Icons.apple, color: AppColors.ink, size: 22),
-          onPressed: _isLoading ? null : _signInWithApple,
-        ),
+        if (social.google && social.apple) const SizedBox(height: 10),
+        if (social.apple)
+          _buildSocialButton(
+            key: const ValueKey('btn-apple-sign-in'),
+            label: _isRegisterMode
+                ? 'Đăng ký bằng Apple'
+                : 'Tiếp tục với Apple',
+            icon: const Icon(Icons.apple, color: AppColors.ink, size: 22),
+            onPressed: _isLoading ? null : _signInWithApple,
+          ),
       ],
     );
   }
@@ -587,37 +528,6 @@ class _LoginViewState extends State<LoginView>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildAnonButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: OutlinedButton(
-        onPressed: _isLoading ? null : _continueWithoutAccount,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.ink,
-          side: const BorderSide(color: AppColors.line, width: 1.5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        child: Text(
-          'Tiếp tục không cần tài khoản',
-          style: AppTypography.button.copyWith(color: AppColors.textSecondary),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnonNote() {
-    return Center(
-      child: Text(
-        'Chế độ khách dùng tài khoản ẩn danh và đồng bộ lên Firebase. Không đảm bảo khôi phục sau khi đăng xuất hoặc đổi thiết bị.',
-        style: AppTypography.caption,
-        textAlign: TextAlign.center,
       ),
     );
   }

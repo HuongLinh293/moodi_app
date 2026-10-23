@@ -72,7 +72,7 @@ class _CheckinViewState extends State<CheckinView> {
     bool navigateToJournal = false,
     bool triggerAIReflection = false,
   }) async {
-    if (_isSaving) return;
+    if (_isSaving || !widget.state.hasChosenEmotion) return;
     setState(() => _isSaving = true);
     MindraMotion.of(widget.state.lowStimulationMode).medium();
 
@@ -183,7 +183,9 @@ class _CheckinViewState extends State<CheckinView> {
     final state = widget.state;
     final selectedKey = state.selectedEmotionKey;
     final selectedEmotion = state.selectedEmotion;
-    final toneColor = selectedEmotion.tone;
+    // Opened from Garden/Explore/Pause before any pick: don't assume a feeling.
+    final awaitingChoice = !state.hasChosenEmotion;
+    final toneColor = awaitingChoice ? AppColors.cream : selectedEmotion.tone;
     final isDarkTone = toneColor.computeLuminance() < 0.42;
     final contentTextColor = isDarkTone ? Colors.white : AppColors.ink;
     final facePaletteColors =
@@ -191,6 +193,7 @@ class _CheckinViewState extends State<CheckinView> {
         AppColors.facePalette['calm']!;
     final faceBackground = facePaletteColors[0];
     final faceStroke = facePaletteColors[1];
+    final canSave = !_isSaving && !awaitingChoice;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -232,35 +235,40 @@ class _CheckinViewState extends State<CheckinView> {
               decoration: BoxDecoration(
                 color: toneColor,
                 borderRadius: BorderRadius.circular(22),
+                border: awaitingChoice
+                    ? Border.all(color: AppColors.line)
+                    : null,
               ),
               child: Row(
                 children: [
-                  Transform.rotate(
-                    angle: 0.08,
-                    child: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: faceBackground,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.ink.withValues(alpha: 0.12),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: MoodFace(
-                        faceType: selectedEmotion.face,
-                        size: 44,
-                        backgroundColor: faceBackground,
-                        strokeColor: faceStroke,
+                  if (!awaitingChoice) ...[
+                    Transform.rotate(
+                      angle: 0.08,
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: faceBackground,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.ink.withValues(alpha: 0.12),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: MoodFace(
+                          faceType: selectedEmotion.face,
+                          size: 44,
+                          backgroundColor: faceBackground,
+                          strokeColor: faceStroke,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
+                    const SizedBox(width: 16),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,7 +282,9 @@ class _CheckinViewState extends State<CheckinView> {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          selectedEmotion.vi,
+                          awaitingChoice
+                              ? 'Chưa chọn cảm xúc'
+                              : selectedEmotion.vi,
                           style: AppTypography.headlineMedium.copyWith(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
@@ -284,7 +294,9 @@ class _CheckinViewState extends State<CheckinView> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          selectedEmotion.promptSubtitle,
+                          awaitingChoice
+                              ? 'Chọn cảm xúc gần nhất bên dưới. Không cần chính xác.'
+                              : selectedEmotion.promptSubtitle,
                           style: AppTypography.bodySmall.copyWith(
                             color: contentTextColor.withValues(alpha: 0.8),
                             fontSize: 12,
@@ -301,7 +313,10 @@ class _CheckinViewState extends State<CheckinView> {
             const SizedBox(height: 20),
 
             // 2. Thay đổi cảm xúc nhanh (Quick Emotion Switcher)
-            Text('CHỌN CẢM XÚC KHÁC NẾU CẦN', style: AppTypography.kicker),
+            Text(
+              awaitingChoice ? 'CHỌN CẢM XÚC' : 'CHỌN CẢM XÚC KHÁC NẾU CẦN',
+              style: AppTypography.kicker,
+            ),
             const SizedBox(height: 10),
             SizedBox(
               height: 52,
@@ -314,7 +329,7 @@ class _CheckinViewState extends State<CheckinView> {
                 itemBuilder: (context, index) {
                   final key = MindraEmotions.all.keys.elementAt(index);
                   final emo = MindraEmotions.all[key]!;
-                  final isSelected = key == selectedKey;
+                  final isSelected = !awaitingChoice && key == selectedKey;
 
                   return Semantics(
                     button: true,
@@ -448,9 +463,10 @@ class _CheckinViewState extends State<CheckinView> {
             ),
             const SizedBox(height: 24),
 
-            if (selectedKey == 'angry' ||
-                selectedKey == 'stressed' ||
-                (selectedKey == 'anxious' && _intensity >= 4)) ...[
+            if (!awaitingChoice &&
+                (selectedKey == 'angry' ||
+                    selectedKey == 'stressed' ||
+                    (selectedKey == 'anxious' && _intensity >= 4))) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 20),
                 padding: const EdgeInsets.all(14),
@@ -665,7 +681,7 @@ class _CheckinViewState extends State<CheckinView> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Khoảnh khắc này sẽ nở thành hoa "${selectedEmotion.vi}" trong Khu vườn tháng ${DateTime.now().month}.',
+                            'Sau khi lưu, bạn có thể giữ khoảnh khắc này thành ${awaitingChoice ? 'một bông hoa' : 'hoa "${selectedEmotion.vi}"'} trong Khu vườn tháng ${DateTime.now().month}.',
                             style: AppTypography.caption.copyWith(
                               color: AppColors.textSecondary,
                               fontSize: 11,
@@ -692,7 +708,7 @@ class _CheckinViewState extends State<CheckinView> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : () => _handleSave(),
+                  onPressed: canSave ? () => _handleSave() : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.ink,
                     foregroundColor: Colors.white,
@@ -716,9 +732,9 @@ class _CheckinViewState extends State<CheckinView> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _isSaving
-                      ? null
-                      : () => _handleSave(triggerAIReflection: true),
+                  onPressed: canSave
+                      ? () => _handleSave(triggerAIReflection: true)
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.ink,
                     foregroundColor: Colors.white,
@@ -747,9 +763,9 @@ class _CheckinViewState extends State<CheckinView> {
               const SizedBox(height: 10),
               Center(
                 child: TextButton(
-                  onPressed: _isSaving
-                      ? null
-                      : () => _handleSave(navigateToJournal: false),
+                  onPressed: canSave
+                      ? () => _handleSave(navigateToJournal: false)
+                      : null,
                   child: Text(
                     'Chỉ lưu check-in này',
                     style: AppTypography.caption.copyWith(
@@ -764,9 +780,9 @@ class _CheckinViewState extends State<CheckinView> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _isSaving
-                      ? null
-                      : () => _handleSave(navigateToJournal: false),
+                  onPressed: canSave
+                      ? () => _handleSave(navigateToJournal: false)
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.ink,
                     foregroundColor: AppColors.yellow,
@@ -799,7 +815,9 @@ class _CheckinViewState extends State<CheckinView> {
               const SizedBox(height: 10),
               Center(
                 child: TextButton(
-                  onPressed: () => _handleSave(navigateToJournal: true),
+                  onPressed: canSave
+                      ? () => _handleSave(navigateToJournal: true)
+                      : null,
                   child: Text(
                     'Lưu & Xem dòng thời gian nhật ký →',
                     style: AppTypography.caption.copyWith(
@@ -807,74 +825,6 @@ class _CheckinViewState extends State<CheckinView> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ),
-            ],
-            if ([
-              'angry',
-              'stressed',
-              'anxious',
-              'sad',
-            ].contains(widget.state.selectedEmotionKey)) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.orange.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.description_outlined,
-                      color: AppColors.orange,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Cảm xúc nặng nề hoặc bực bội?',
-                            style: AppTypography.titleMedium.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
-                          ),
-                          Text(
-                            'Viết ra giấy, vò lại và ném đi khi bạn muốn.',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        PaperReleaseSheet.show(
-                          context: context,
-                          state: widget.state,
-                          initialEmotionKey: widget.state.selectedEmotionKey,
-                        );
-                      },
-                      child: Text(
-                        'Vò giấy',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.orange,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],
@@ -899,6 +849,7 @@ class _CheckinViewState extends State<CheckinView> {
           builder: (context, value, _) {
             final hasText = value.text.isNotEmpty;
             return TextField(
+              maxLength: 4000,
               key: ValueKey<String>(label),
               controller: controller,
               minLines: 2,

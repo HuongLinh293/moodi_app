@@ -1,5 +1,5 @@
-import '../widgets/entry_sync_notice.dart';
 import '../core/garden_actions.dart';
+import '../widgets/entry_sync_notice.dart';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -26,12 +26,10 @@ class JournalView extends StatefulWidget {
 class _JournalViewState extends State<JournalView> {
   late DateTime _selectedDate;
   late DateTime _displayedMonth;
-  int _viewMode =
-      0; // 0: Lưới tháng (Calendar Grid), 1: Dòng thời gian (Timeline)
+  final TextEditingController _searchController = TextEditingController();
   String? _selectedFilterKey;
   String _searchQuery = '';
   String? _selectedTriggerFilter;
-  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -68,6 +66,18 @@ class _JournalViewState extends State<JournalView> {
     return _isSameDay(d, DateTime.now());
   }
 
+  bool _isFuture(DateTime d) {
+    final now = DateTime.now();
+    return DateTime(d.year, d.month, d.day)
+        .isAfter(DateTime(now.year, now.month, now.day));
+  }
+
+  bool get _isDisplayingCurrentMonth {
+    final now = DateTime.now();
+    return _displayedMonth.year == now.year &&
+        _displayedMonth.month == now.month;
+  }
+
   void _onDateSelected(DateTime date) {
     MindraMotion.of(widget.state.lowStimulationMode).light();
     setState(() {
@@ -90,6 +100,7 @@ class _JournalViewState extends State<JournalView> {
   }
 
   void _nextMonth() {
+    if (_isDisplayingCurrentMonth) return;
     MindraMotion.of(widget.state.lowStimulationMode).light();
     setState(() {
       _displayedMonth = DateTime(
@@ -134,6 +145,7 @@ class _JournalViewState extends State<JournalView> {
     DateTime targetDate, [
     JournalEntry? existingEntry,
   ]) {
+    if (existingEntry == null && _isFuture(targetDate)) return;
     MindraMotion.of(widget.state.lowStimulationMode).medium();
     final isEditing = existingEntry != null;
     String selectedKey = existingEntry?.emotionKey ?? 'calm';
@@ -162,7 +174,9 @@ class _JournalViewState extends State<JournalView> {
               ),
               child: SafeArea(
                 top: false,
-                child: Column(
+                child: GestureDetector(
+                  onTap: () => FocusScope.of(modalContext).unfocus(),
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -339,6 +353,7 @@ class _JournalViewState extends State<JournalView> {
                     const SizedBox(height: 14),
                     // Ghi chú ngắn
                     TextField(
+                      maxLength: 4000,
                       controller: noteController,
                       maxLines: 2,
                       style: AppTypography.bodyMedium,
@@ -467,6 +482,7 @@ class _JournalViewState extends State<JournalView> {
                     ],
                   ],
                 ),
+                ),
               ),
             );
           },
@@ -479,9 +495,11 @@ class _JournalViewState extends State<JournalView> {
   void _confirmDeleteEntry(JournalEntry entry) {
     MindraMotion.of(widget.state.lowStimulationMode).light();
     final emo = MindraEmotions.get(entry.emotionKey);
+    var deleting = false;
     showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(
@@ -496,7 +514,7 @@ class _JournalViewState extends State<JournalView> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
+            onPressed: deleting ? null : () => Navigator.pop(dialogCtx),
             child: Text(
               'Hủy',
               style: AppTypography.button.copyWith(
@@ -508,16 +526,21 @@ class _JournalViewState extends State<JournalView> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.orange,
               foregroundColor: Colors.white,
+              disabledBackgroundColor: AppColors.orange.withValues(alpha: 0.6),
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: () async {
+            onPressed: deleting
+                ? null
+                : () async {
+              setDialogState(() => deleting = true);
               try {
                 await widget.state.removeEntry(entry.id);
               } catch (_) {
                 if (!dialogCtx.mounted) return;
+                setDialogState(() => deleting = false);
                 ScaffoldMessenger.of(dialogCtx).showSnackBar(
                   const SnackBar(
                     content: Text('Chưa xóa được ghi chép. Hãy thử lại.'),
@@ -540,9 +563,19 @@ class _JournalViewState extends State<JournalView> {
                 ),
               );
             },
-            child: const Text('Xóa'),
+            child: deleting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Xóa'),
           ),
         ],
+        ),
       ),
     );
   }
@@ -710,6 +743,7 @@ class _JournalViewState extends State<JournalView> {
                     final cellDate = DateTime(year, month, dayNum);
                     final isSelected = _isSameDay(cellDate, _selectedDate);
                     final isToday = _isToday(cellDate);
+                    final isFuture = _isFuture(cellDate);
 
                     final dayEntries = _getEntriesForDate(cellDate);
                     final hasEntry = dayEntries.isNotEmpty;
@@ -733,10 +767,13 @@ class _JournalViewState extends State<JournalView> {
                         preferBelow: false,
                         child: Semantics(
                           button: true,
+                          enabled: !isFuture,
                           selected: isSelected,
                           label: tooltipText,
                           child: GestureDetector(
-                            onTap: () => _onDateSelected(cellDate),
+                            onTap: isFuture
+                                ? null
+                                : () => _onDateSelected(cellDate),
                             behavior: HitTestBehavior.opaque,
                             child: AnimatedContainer(
                               duration: MindraMotion.of(
@@ -777,7 +814,12 @@ class _JournalViewState extends State<JournalView> {
                                           ? AppColors.ink
                                           : (isToday
                                                 ? AppColors.orange
-                                                : AppColors.textMuted),
+                                                : (isFuture
+                                                      ? AppColors.textTertiary
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            )
+                                                      : AppColors.textMuted)),
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -1173,8 +1215,13 @@ class _JournalViewState extends State<JournalView> {
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
                               onPressed: () async {
-                                if (widget.state.isPlanted(entry.id)) {
-                                  widget.state.setTab(2);
+                                final moment = widget.state.momentForEntry(
+                                  entry.id,
+                                );
+                                if (moment != null) {
+                                  widget.state.openGarden(
+                                    monthKey: moment.monthKey,
+                                  );
                                   return;
                                 }
                                 final success = await runGardenAction(
@@ -1283,7 +1330,7 @@ class _JournalViewState extends State<JournalView> {
     );
   }
 
-  // Chế độ xem dòng thời gian (Timeline View)
+  // ignore: unused_element — preserved for future reactivation
   Widget _buildTimelineView() {
     var allEntries = List<JournalEntry>.from(widget.state.entries)
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -1320,7 +1367,9 @@ class _JournalViewState extends State<JournalView> {
       'uncertainty': 'Chưa rõ',
     };
 
-    return Column(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Search bar
@@ -1661,6 +1710,7 @@ class _JournalViewState extends State<JournalView> {
             },
           ),
       ],
+    ),
     );
   }
 
@@ -1719,244 +1769,98 @@ class _JournalViewState extends State<JournalView> {
 
     return SingleChildScrollView(
       physics: MindraMotion.of(widget.state.lowStimulationMode).scrollPhysics,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           EntrySyncNotice(state: widget.state),
-          Text('Nhật ký của bạn', style: AppTypography.headlineMedium),
-          const SizedBox(height: 6),
-          Text(
-            'Tìm lại những điều bạn đã ghi nhận.',
-            style: AppTypography.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          // Nút chuyển chế độ (Lưới tháng / Dòng thời gian)
-          Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: AppColors.creamDark,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      MindraMotion.of(widget.state.lowStimulationMode)
-                          .selection();
-                      setState(() => _viewMode = 0);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: _viewMode == 0
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(15),
-                        boxShadow: _viewMode == 0
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.ink.withValues(alpha: 0.08),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ]
-                            : null,
+
+          // Month header + navigation — compact, top-aligned
+          Row(
+            children: [
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: AppTypography.displayMedium.copyWith(fontSize: 22),
+                    children: [
+                      TextSpan(
+                        text: monthName.toUpperCase(),
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: AppColors.orange,
+                        ),
                       ),
-                      alignment: Alignment.center,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_view_month_rounded,
-                            size: 15,
-                            color: _viewMode == 0
-                                ? AppColors.ink
-                                : AppColors.textTertiary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Lịch',
-                            style: AppTypography.caption.copyWith(
-                              fontWeight: _viewMode == 0
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: _viewMode == 0
-                                  ? AppColors.ink
-                                  : AppColors.textTertiary,
-                            ),
-                          ),
-                        ],
+                      TextSpan(
+                        text: ' ${_displayedMonth.year}',
+                        style: const TextStyle(color: AppColors.ink),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: _previousMonth,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.chevron_left_rounded,
+                      size: 22,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: _isDisplayingCurrentMonth ? null : _nextMonth,
+                behavior: HitTestBehavior.opaque,
+                child: Opacity(
+                  opacity: _isDisplayingCurrentMonth ? 0.35 : 1,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 22,
+                        color: AppColors.ink,
                       ),
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () {
-                      MindraMotion.of(widget.state.lowStimulationMode)
-                          .selection();
-                      setState(() => _viewMode = 1);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: _viewMode == 1
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(15),
-                        boxShadow: _viewMode == 1
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.ink.withValues(alpha: 0.08),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      alignment: Alignment.center,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.list_alt_rounded,
-                            size: 15,
-                            color: _viewMode == 1
-                                ? AppColors.ink
-                                : AppColors.textTertiary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Nhật ký',
-                            style: AppTypography.caption.copyWith(
-                              fontWeight: _viewMode == 1
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: _viewMode == 1
-                                  ? AppColors.ink
-                                  : AppColors.textTertiary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
+
+          const SizedBox(height: 10),
+
+          // Monthly stats bar
+          _buildMonthStatsBar(),
 
           const SizedBox(height: 12),
 
-          // Header Tháng & Điều hướng qua lại giữa các tháng (Emolog style)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final monthTitle = RichText(
-                text: TextSpan(
-                  style: AppTypography.displayMedium.copyWith(fontSize: 26),
-                  children: [
-                    TextSpan(
-                      text: monthName.toUpperCase(),
-                      style: TextStyle(
-                        fontStyle: FontStyle.italic,
-                        color: AppColors.orange,
-                      ),
-                    ),
-                    TextSpan(
-                      text: ' ${_displayedMonth.year}',
-                      style: const TextStyle(color: AppColors.ink),
-                    ),
-                  ],
-                ),
-              );
-              final monthNavigation = Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: _previousMonth,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.line),
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.chevron_left_rounded,
-                          size: 24,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: _nextMonth,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.line),
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 24,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
+          // Calendar grid
+          _buildEmologMonthCalendar(),
 
-              if (constraints.maxWidth < 420) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    monthTitle,
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: monthNavigation,
-                    ),
-                  ],
-                );
-              }
+          const SizedBox(height: 16),
 
-              return Row(
-                children: [
-                  Expanded(child: monthTitle),
-                  monthNavigation,
-                ],
-              );
-            },
-          ),
+          // Selected day detail
+          _buildSelectedDayDetailCard(),
 
-          const SizedBox(height: 14),
-
-          // Tóm tắt cảm xúc tháng (Emolog Stats)
-          _buildMonthStatsBar(),
-
-          const SizedBox(height: 18),
-
-          // Nội dung theo View Mode (Lưới tháng hoặc Dòng thời gian)
-          if (_viewMode == 0) ...[
-            _buildEmologMonthCalendar(),
-            const SizedBox(height: 24),
-            _buildSelectedDayDetailCard(),
-          ] else ...[
-            _buildTimelineView(),
-          ],
-
-          const SizedBox(height: 40),
+          const SizedBox(height: 24),
         ],
       ),
     );

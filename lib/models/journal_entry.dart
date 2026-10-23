@@ -101,7 +101,7 @@ class JournalEntry {
       if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
       if (raw is String) {
         final parsed = DateTime.tryParse(raw);
-        if (parsed != null) return parsed;
+        if (parsed != null) return parsed.toLocal();
       }
       try {
         // Handle cloud_firestore Timestamp without hard dependency
@@ -134,4 +134,3 @@ class JournalEntry {
     return JournalEntry.fromFirestore(json, id ?? json['id'] as String? ?? '');
   }
 }
-

@@ -34,7 +34,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
     with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _hasError = false;
-  late final AIReflection _reflection;
+  late AIReflection _reflection;
   String? _userFeedback;
   bool _microGoalSaved = false;
   late List<String> _possibleEmotions;
@@ -75,7 +75,11 @@ class _AIReflectionViewState extends State<AIReflectionView>
           situation: widget.entry.situation,
           thought: widget.entry.thought,
         );
-    widget.state.cacheAIReflection(widget.entry.id, _reflection);
+    if (widget.state.reflectionForEntry(widget.entry.id) == null) {
+      unawaited(_loadServerReflection());
+    } else {
+      widget.state.cacheAIReflection(widget.entry.id, _reflection);
+    }
     _possibleEmotions = List.of(_reflection.possibleEmotions);
     _possibleTrigger = _reflection.possibleTrigger;
     _intensifyingThought = _reflection.intensifyingThought;
@@ -97,6 +101,34 @@ class _AIReflectionViewState extends State<AIReflectionView>
     );
 
     _startLoading();
+  }
+
+  Future<void> _loadServerReflection() async {
+    try {
+      final generated = await widget.state.fetchOrGenerateAIReflection(
+        widget.entry,
+      );
+      if (!mounted) return;
+      _applyReflection(generated);
+    } catch (_) {
+      if (mounted) widget.state.cacheAIReflection(widget.entry.id, _reflection);
+    }
+  }
+
+  void _applyReflection(AIReflection reflection) {
+    setState(() {
+      _reflection = reflection;
+      _possibleEmotions = List.of(reflection.possibleEmotions);
+      _possibleTrigger = reflection.possibleTrigger;
+      _intensifyingThought = reflection.intensifyingThought;
+      _balancedThought = reflection.balancedThought;
+      _reflectionQuestion = reflection.reflectionQuestion;
+      _recommendedExercise = reflection.recommendedExercise;
+      _recommendationReason = reflection.recommendationReason;
+      _microGoalPrompt = reflection.microGoalPrompt;
+      _userFeedback = reflection.userFeedback;
+      _recommendationsDismissed = reflection.recommendationsDismissed;
+    });
   }
 
   void _startLoading() {
@@ -365,7 +397,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
                 ),
                 const SizedBox(height: 32),
                 Text(
-                  'Mindra đang suy ngẫm...',
+                  'Moodi đang suy ngẫm...',
                   style: AppTypography.headlineMedium.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink,
@@ -552,7 +584,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
                   const SizedBox(height: 14),
                   Text(
                     'Chúng tôi nhận thấy bạn đang trải qua những cảm xúc rất nặng nề hoặc đau đớn. '
-                    'Mindra là công cụ tự phản tư thường ngày và không thể thay thế sự trợ giúp chuyên môn khi bạn cần an toàn tức thời.',
+                    'Moodi là công cụ tự phản tư thường ngày và không thể thay thế sự trợ giúp chuyên môn khi bạn cần an toàn tức thời.',
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textPrimary,
                       height: 1.45,
@@ -725,7 +757,6 @@ class _AIReflectionViewState extends State<AIReflectionView>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              EntrySyncNotice(state: widget.state),
               const Padding(
                 padding: EdgeInsets.only(bottom: 16),
                 child: Text(
@@ -774,66 +805,75 @@ class _AIReflectionViewState extends State<AIReflectionView>
               ),
               const SizedBox(height: 18),
 
-              // Card 1: Trigger & Intensifying thought
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppColors.cream,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: AppShadows.card,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text('🔍', style: TextStyle(fontSize: 16)),
-                        const SizedBox(width: 8),
+              // Card 1: Trigger & Intensifying thought — only what the user gave us.
+              if (_possibleTrigger.isNotEmpty ||
+                  _intensifyingThought.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: AppShadows.card,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_possibleTrigger.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            const Text('🔍', style: TextStyle(fontSize: 16)),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Tác nhân nhận thấy',
+                              style: AppTypography.caption.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
                         Text(
-                          'Tác nhân nhận thấy',
-                          style: AppTypography.caption.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textSecondary,
+                          _possibleTrigger,
+                          style: AppTypography.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.ink,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _possibleTrigger,
-                      style: AppTypography.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                    const Divider(height: 24),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        const Text('💭', style: TextStyle(fontSize: 16)),
+                      if (_possibleTrigger.isNotEmpty &&
+                          _intensifyingThought.isNotEmpty)
+                        const Divider(height: 24),
+                      if (_intensifyingThought.isNotEmpty) ...[
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            const Text('💭', style: TextStyle(fontSize: 16)),
+                            Text(
+                              'Suy nghĩ có thể đang phóng đại',
+                              style: AppTypography.caption.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
                         Text(
-                          'Suy nghĩ có thể đang phóng đại',
-                          style: AppTypography.caption.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.orange,
+                          '“$_intensifyingThought”',
+                          style: AppTypography.bodyMedium.copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: AppColors.ink,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '“$_intensifyingThought”',
-                      style: AppTypography.bodyMedium.copyWith(
-                        fontStyle: FontStyle.italic,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
+                const SizedBox(height: 14),
+              ],
 
               // Card 2: Balanced perspective
               Container(
@@ -932,6 +972,18 @@ class _AIReflectionViewState extends State<AIReflectionView>
                           ),
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _selectedLens == null
+                          ? 'Chạm một lăng kính để đọc lại suy nghĩ cân bằng qua góc nhìn đó.'
+                          : ReframingLens.all
+                                .firstWhere((l) => l.type == _selectedLens)
+                                .description,
+                      style: AppTypography.caption.copyWith(
+                        color: const Color(0xFF1E634F),
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -1181,6 +1233,10 @@ class _AIReflectionViewState extends State<AIReflectionView>
                 ),
               const SizedBox(height: 20),
 
+              // Sync status sits at the end so it doesn't open the reflection
+              // with a warning right after every save.
+              EntrySyncNotice(state: widget.state),
+
               // Done button
               SizedBox(
                 width: double.infinity,
@@ -1406,7 +1462,9 @@ class _ReflectionEditSheetState extends State<_ReflectionEditSheet> {
         ),
         child: SafeArea(
           top: false,
-          child: Column(
+          child: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Column(
             children: [
               const SizedBox(height: 12),
               Container(
@@ -1509,6 +1567,7 @@ class _ReflectionEditSheetState extends State<_ReflectionEditSheet> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

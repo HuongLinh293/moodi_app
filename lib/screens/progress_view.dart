@@ -9,7 +9,6 @@ import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
 import '../widgets/pattern_explorer_card.dart';
 import '../widgets/weekly_postcard_sheet.dart';
-import 'garden_view.dart';
 
 class ProgressView extends StatelessWidget {
   final MindraState state;
@@ -102,34 +101,50 @@ class ProgressView extends StatelessWidget {
             _buildPatternCard(dominantEmo, dominantTrigger),
             const SizedBox(height: 16),
 
-            // Pattern Explorer (S17-P)
-            PatternExplorerCard(state: state),
-            const SizedBox(height: 16),
-
             // So sánh trước / sau bài tập (S17 - khi có dữ liệu)
             if (latestExercise != null) ...[
               _buildExerciseOutcomeCard(latestExercise),
               const SizedBox(height: 16),
             ],
 
-            // Phân bố cảm xúc thực tế (S17 - Dynamic Breakdown)
-            _buildEmotionBreakdownCard(breakdown),
-            const SizedBox(height: 16),
-
-            // Huy hiệu nhận biết (S18 - Dynamic Badges)
-            _buildBadgesSection(context),
-            const SizedBox(height: 16),
-
             // Nhìn lại tuần (S17-W - Weekly Review)
             _buildWeeklyReviewCard(context),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
-            // Khu vườn tâm trí (S18-G - Garden entrance)
-            if (state.gardenVisible) ...[
-              _buildGardenEntranceCard(context),
-              const SizedBox(height: 24),
-            ] else
-              const SizedBox(height: 8),
+            // Deeper analysis stays one tap away so the tab reads as a
+            // short weekly summary first.
+            Theme(
+              data: Theme.of(context)
+                  .copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                key: const ValueKey('progress-details'),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                iconColor: AppColors.ink,
+                collapsedIconColor: AppColors.ink,
+                title: Text(
+                  'Xem phân tích chi tiết',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: Text(
+                  'Nhịp lặp lại, phân bố cảm xúc, huy hiệu',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                children: [
+                  PatternExplorerCard(state: state),
+                  const SizedBox(height: 16),
+                  _buildEmotionBreakdownCard(breakdown),
+                  const SizedBox(height: 16),
+                  _buildBadgesSection(context),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
           ],
         ],
       ),
@@ -320,99 +335,6 @@ class ProgressView extends StatelessWidget {
     );
   }
 
-  // ────────────────────────────────────────────
-  // Garden Entrance Card (S18-G)
-  // ────────────────────────────────────────────
-  Widget _buildGardenEntranceCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        MindraMotion.of(state.lowStimulationMode).light();
-        Navigator.of(context).push(
-          PageRouteBuilder(
-            pageBuilder: (ctx, anim, _) => GardenView(state: state),
-            transitionsBuilder: (ctx, anim, _, child) =>
-                FadeTransition(opacity: anim, child: child),
-            transitionDuration: MindraMotion.of(state.lowStimulationMode)
-                .mediumDuration,
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.mint.withValues(alpha: 0.18),
-              AppColors.blue.withValues(alpha: 0.10),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.7),
-                border: Border.all(
-                  color: AppColors.mint.withValues(alpha: 0.4),
-                ),
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.local_florist_rounded,
-                  size: 28,
-                  color: AppColors.orange,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Khu vườn tâm trí',
-                    style: AppTypography.titleMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    state.gardenMoments.isEmpty
-                        ? 'Chưa giữ khoảnh khắc nào'
-                        : '${state.gardenMoments.length} khoảnh khắc đã giữ lại',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Giữ những điều bạn muốn nhớ. Hoa không mất khi bạn nghỉ.',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textMuted,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.textMuted,
-              size: 22,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // Empty state khi người dùng chưa có entry nào
   Widget _buildEmptyState(BuildContext context) {
     return Container(
@@ -528,7 +450,7 @@ class ProgressView extends StatelessWidget {
                     ? avgIntensity.toStringAsFixed(1)
                     : '--',
                 unit: avgIntensity > 0 ? '/5' : '',
-                label: 'CƯỜNG ĐỘ TRUNG BÌNH',
+                label: 'CƯỜNG ĐỘ TUẦN',
                 semanticsLabel: avgIntensity > 0
                     ? 'Cường độ trung bình: ${avgIntensity.toStringAsFixed(1)} trên 5'
                     : 'Chưa có cường độ trung bình',
@@ -650,11 +572,13 @@ class ProgressView extends StatelessWidget {
                 color: Color(0xFF245448),
               ),
               const SizedBox(width: 6),
-              Text(
-                'PATTERN NHẬN THẤY',
-                style: AppTypography.kicker.copyWith(
-                  color: const Color(0xFF245448),
-                  fontWeight: FontWeight.w700,
+              Flexible(
+                child: Text(
+                  'ĐIỀU MÌNH NHẬN THẤY',
+                  style: AppTypography.kicker.copyWith(
+                    color: const Color(0xFF245448),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -1171,7 +1095,9 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Padding(
           padding: EdgeInsets.fromLTRB(
             22,
             16,
@@ -1314,6 +1240,7 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

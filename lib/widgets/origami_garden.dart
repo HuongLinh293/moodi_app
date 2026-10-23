@@ -15,6 +15,7 @@ import '../models/garden_moment.dart';
 import '../models/journal_entry.dart';
 import '../state/mindra_state.dart';
 import 'garden_weather.dart';
+import 'airmail_border.dart';
 
 class GardenBedView extends StatefulWidget {
   final MindraState state;
@@ -80,23 +81,33 @@ class _GardenBedViewState extends State<GardenBedView> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Icon(_currentWeather.icon, color: _currentWeather.color, size: 24),
+                    Icon(
+                      _currentWeather.icon,
+                      color: _currentWeather.color,
+                      size: 24,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Bầu không khí: ${_currentWeather.label}',
-                      style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
+                      style: AppTypography.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _currentWeather.description,
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'Chọn bầu không khí cho vườn:',
-                  style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -106,12 +117,18 @@ class _GardenBedViewState extends State<GardenBedView> {
                     final selected = _currentWeather == w;
                     return ChoiceChip(
                       selected: selected,
-                      avatar: Icon(w.icon, size: 16, color: selected ? Colors.white : w.color),
+                      avatar: Icon(
+                        w.icon,
+                        size: 16,
+                        color: selected ? Colors.white : w.color,
+                      ),
                       label: Text(w.label),
                       selectedColor: w.color,
                       labelStyle: TextStyle(
                         color: selected ? Colors.white : AppColors.textPrimary,
-                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: selected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         fontSize: 12,
                       ),
                       onSelected: (val) {
@@ -161,89 +178,107 @@ class _GardenBedViewState extends State<GardenBedView> {
       child: Container(
         height: height,
         width: double.infinity,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: AppColors.yellow,
-          borderRadius: BorderRadius.circular(widget.compact ? 18 : 24),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) => Stack(
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: GardenBackdropPainter(compact: widget.compact),
-                ),
-              ),
-              Positioned.fill(
-                child: GardenWeatherAtmosphere(
-                  weather: _currentWeather,
-                  reducedMotion: widget.reducedMotion,
-                ),
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(painter: GardenStemsPainter(bed: widget.bed)),
-                ),
-              ),
-              if (!widget.compact)
-                Positioned(
-                  top: 10,
-                  right: 12,
-                  child: GardenWeatherBadge(
-                    weather: _currentWeather,
-                    onTap: _showWeatherDialog,
-                  ),
-                ),
-              if (_selectedMomentId != null)
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => setState(() => _selectedMomentId = null),
-                  ),
-                ),
-              ...widget.bed.moments.map((moment) {
-                final entry = widget.state.entryById(moment.entryId);
-                if (entry == null) return const SizedBox.shrink();
-                final slot = GardenLayout.slotAt(moment.slotIndex);
-                final bloom = widget.compact ? slot.size * 0.72 : slot.size;
-                final hit = math.max(bloom, 44.0);
-                final isSelected = _selectedMomentId == moment.id;
-                return Positioned(
-                  left: constraints.maxWidth * slot.x - hit / 2,
-                  top: constraints.maxHeight * slot.y - hit / 2,
-                  width: hit,
-                  height: hit,
-                  child: Center(
-                    child: SizedBox(
-                      width: bloom,
-                      height: bloom,
-                      child: _MomentBloomButton(
-                        moment: moment,
-                        entry: entry,
-                        bloomed: true,
-                        interactive: widget.interactive,
-                        reducedMotion: widget.reducedMotion,
-                        isSelected: isSelected,
-                        onTap: () {
-                          MindraMotion(widget.reducedMotion).selection();
-                          if (widget.compact) {
-                            widget.onOpenMoment?.call(moment);
-                            return;
-                          }
-                          if (_selectedMomentId == moment.id) {
-                            widget.onOpenMoment?.call(moment);
-                          } else {
-                            setState(() => _selectedMomentId = moment.id);
-                          }
-                        },
+        clipBehavior: Clip.none,
+        child: CustomPaint(
+          painter: AirmailBorderPainter(
+            radius: widget.compact ? 18 : 24,
+            inset: 5,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(5),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(widget.compact ? 13 : 19),
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: GardenBackdropPainter(compact: widget.compact),
                       ),
                     ),
-                  ),
-                );
-              }),
-              if (selectedMoment != null && selectedEntry != null && !widget.compact)
-                _buildCalloutBubble(constraints, selectedMoment, selectedEntry),
-            ],
+                    Positioned.fill(
+                      child: GardenWeatherAtmosphere(
+                        weather: _currentWeather,
+                        reducedMotion: widget.reducedMotion,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: GardenStemsPainter(bed: widget.bed),
+                        ),
+                      ),
+                    ),
+                    if (!widget.compact)
+                      Positioned(
+                        top: 10,
+                        right: 12,
+                        child: GardenWeatherBadge(
+                          weather: _currentWeather,
+                          onTap: _showWeatherDialog,
+                        ),
+                      ),
+                    if (_selectedMomentId != null)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () => setState(() => _selectedMomentId = null),
+                        ),
+                      ),
+                    ...widget.bed.moments.map((moment) {
+                      final entry = widget.state.entryById(moment.entryId);
+                      if (entry == null) return const SizedBox.shrink();
+                      final slot = GardenLayout.slotAt(moment.slotIndex);
+                      final bloom = widget.compact
+                          ? slot.size * 0.72
+                          : slot.size;
+                      final hit = math.max(bloom, 44.0);
+                      final isSelected = _selectedMomentId == moment.id;
+                      return Positioned(
+                        left: constraints.maxWidth * slot.x - hit / 2,
+                        top: constraints.maxHeight * slot.y - hit / 2,
+                        width: hit,
+                        height: hit,
+                        child: Center(
+                          child: SizedBox(
+                            width: bloom,
+                            height: bloom,
+                            child: _MomentBloomButton(
+                              moment: moment,
+                              entry: entry,
+                              bloomed: true,
+                              interactive: widget.interactive,
+                              reducedMotion: widget.reducedMotion,
+                              isSelected: isSelected,
+                              onTap: () {
+                                MindraMotion(widget.reducedMotion).selection();
+                                if (widget.compact) {
+                                  widget.onOpenMoment?.call(moment);
+                                  return;
+                                }
+                                if (_selectedMomentId == moment.id) {
+                                  widget.onOpenMoment?.call(moment);
+                                } else {
+                                  setState(() => _selectedMomentId = moment.id);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                    if (selectedMoment != null &&
+                        selectedEntry != null &&
+                        !widget.compact)
+                      _buildCalloutBubble(
+                        constraints,
+                        selectedMoment,
+                        selectedEntry,
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -259,8 +294,10 @@ class _GardenBedViewState extends State<GardenBedView> {
     final flowerX = constraints.maxWidth * slot.x;
     final flowerY = constraints.maxHeight * slot.y;
     final bubbleWidth = math.min(250.0, constraints.maxWidth - 24.0);
-    final bubbleLeft = (flowerX - bubbleWidth / 2)
-        .clamp(12.0, constraints.maxWidth - bubbleWidth - 12.0);
+    final bubbleLeft = (flowerX - bubbleWidth / 2).clamp(
+      12.0,
+      constraints.maxWidth - bubbleWidth - 12.0,
+    );
 
     final showAbove = slot.y > 0.44;
     final bubbleTop = showAbove
@@ -374,7 +411,10 @@ class _GardenCalloutBubble extends StatelessWidget {
                 TextButton(
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -391,7 +431,10 @@ class _GardenCalloutBubble extends StatelessWidget {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 2,
+                    ),
                     minimumSize: const Size(0, 26),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -470,18 +513,24 @@ class _MomentBloomButtonState extends State<_MomentBloomButton>
     );
     _bounceAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 0.85)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 1.0,
+          end: 0.85,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 25,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.85, end: 1.18)
-            .chain(CurveTween(curve: Curves.easeOutBack)),
+        tween: Tween<double>(
+          begin: 0.85,
+          end: 1.18,
+        ).chain(CurveTween(curve: Curves.easeOutBack)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.18, end: 1.0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
+        tween: Tween<double>(
+          begin: 1.18,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
         weight: 30,
       ),
     ]).animate(_bounceController!);
@@ -569,10 +618,7 @@ class _MomentBloomButtonState extends State<_MomentBloomButton>
           final scale = _bounceController!.isAnimating
               ? _bounceAnimation.value
               : (widget.isSelected ? 1.12 : 1.0);
-          return Transform.scale(
-            scale: scale,
-            child: child,
-          );
+          return Transform.scale(scale: scale, child: child);
         },
         child: content,
       );

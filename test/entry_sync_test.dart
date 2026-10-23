@@ -86,7 +86,7 @@ void main() {
     );
     addTearDown(state.dispose);
     state.addEntry(entry('new'));
-    await state.syncFromFirestore();
+    await state.syncFromApi();
     expect(state.entryById('seed'), isNotNull);
     expect(state.entryById('new'), isNotNull);
     expect(state.entrySyncStatus('new'), EntrySyncStatus.pending);

@@ -63,6 +63,12 @@ void main() {
         ),
       ),
     );
+    await tester.runAsync(() async {
+      await precacheImage(
+        const AssetImage(CrumpledPaper.assetPath),
+        tester.element(find.byType(CrumpledPaper).first),
+      );
+    });
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     if (Platform.environment['PAPER_PREVIEW'] == '1') {

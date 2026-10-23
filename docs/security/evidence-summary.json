@@ -1,0 +1,503 @@
+{
+  "recordedAt": "2026-10-19T01:01:23.560973+00:00",
+  "environment": "Local Firebase Emulator, demo-moodi-security; no production deployment",
+  "backend": {
+    "passed": 91,
+    "failed": 0
+  },
+  "flutter": {
+    "baselinePassed": 38,
+    "passed": 44,
+    "failed": 0,
+    "analyze": "No issues found"
+  },
+  "sha256": {
+    "firestore.rules": "61f5f72e2a43debeb2840a09512a5d225621b357a98db073a0766c1f37250393",
+    "security-lab/baseline/firestore.rules": "a67a2c8f534135a9684edc50d2a13e0cad9597aeec366c38ab54929c44cd3ccc",
+    "security-lab/firestore.vulnerable.rules": "72be33c2cdba894e6281e760693f8445faf0f4868eee07c2b5a40e9d20a6c593",
+    "functions/index.js": "3633eaf0191b4e5dfc4ecf828ca0fb4f05205a9039fb0923bbacbdcd6f74e09f",
+    "functions/security.js": "aae881ea8313330f2f7efbef28a3c3d125bc46805b05b50d5fe5eb378e126b0f",
+    "functions/test/security.test.js": "22a52c07072be1a7edfc5f076de5170ac6d1ef553147a4f460b853f2a1471e46",
+    "functions/test/callable-security.test.js": "c26ffda862294f6fa0e68b34e15a858395838b047e881bfe3b175a101183cc58",
+    "functions/test/shared-garden.test.js": "803df58c29ebbc07e95ff837c18017b3cad547a4078bd287923877179562bd6b",
+    "lib/state/mindra_state.dart": "645ab586e1eaac83d725e7f1d6d328cea23cca66985a8e58737b2831704fed3a",
+    "lib/main.dart": "c2d45d109ff49c44c97bb8c099b700b43df2ce9476109bea70e9a3af0399498d",
+    "test/session_security_test.dart": "f9c320a8745a186cb6f79befb2d6f1d7144a884a86a4c4d394920692206cda97"
+  },
+  "accessControlMatrix": [
+    {
+      "version": "baseline",
+      "test": "AT-01 get unauthenticated",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-01 list unauthenticated",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-02 read another owner",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-02 enumerate another journal",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-03 overwrite another journal",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-03 delete another journal",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-03 create under another owner",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 forge owner on create",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 forge owner on update",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 inject role",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 overlong create",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 overlong update",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 wrong type",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 invalid range",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 omit required field",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-04 rewrite timestamp",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-05 read garden as outsider",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-05 self-enroll without invitation",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-06 former member read",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-06 former member write",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-08 owner read",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-08 owner ordered list",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-08 owner create",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-08 owner edit",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-08 owner delete",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "baseline",
+      "test": "AT-08 current garden member read",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-01 get unauthenticated",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-01 list unauthenticated",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-02 read another owner",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-02 enumerate another journal",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-03 overwrite another journal",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-03 delete another journal",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-03 create under another owner",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 forge owner on create",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 forge owner on update",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 inject role",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 overlong create",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 overlong update",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 wrong type",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 invalid range",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 omit required field",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-04 rewrite timestamp",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-05 read garden as outsider",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-05 self-enroll without invitation",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-06 former member read",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-06 former member write",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-08 owner read",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-08 owner ordered list",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-08 owner create",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-08 owner edit",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-08 owner delete",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "vulnerable",
+      "test": "AT-08 current garden member read",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-01 get unauthenticated",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-01 list unauthenticated",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-02 read another owner",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-02 enumerate another journal",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-03 overwrite another journal",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-03 delete another journal",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-03 create under another owner",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 forge owner on create",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 forge owner on update",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 inject role",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 overlong create",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 overlong update",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 wrong type",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 invalid range",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 omit required field",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-04 rewrite timestamp",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-05 read garden as outsider",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-05 self-enroll without invitation",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-06 former member read",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-06 former member write",
+      "expected": "deny",
+      "actual": "deny"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-08 owner read",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-08 owner ordered list",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-08 owner create",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-08 owner edit",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-08 owner delete",
+      "expected": "allow",
+      "actual": "allow"
+    },
+    {
+      "version": "hardened",
+      "test": "AT-08 current garden member read",
+      "expected": "allow",
+      "actual": "allow"
+    }
+  ],
+  "notVerified": [
+    "Manual iOS flow on a new build",
+    "Production deployment/configuration",
+    "Physical-device cache and screenshot protection",
+    "Course rubric compliance"
+  ]
+}

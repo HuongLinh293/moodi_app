@@ -38,13 +38,13 @@ dependencies:
   intl: ^0.20.3
   provider: ^6.1.5+1
   flutter_svg: ^2.3.0
-  # Keep Firebase iOS on 12.x while google_sign_in_ios uses GoogleSignIn 9.x.
-  # Firebase iOS 13 requires incompatible AppCheck / GTMSessionFetcher versions.
-  firebase_core: ^4.15.0
-  cloud_firestore: ^6.10.0
-  firebase_auth: ^6.7.0
-  cloud_functions: ^6.5.0
+  http: ^1.1.0
+  share_plus: ^13.3.1
+  image_picker: ^1.2.4
+  flutter_secure_storage: ^11.2.0
   google_sign_in: ^7.2.0
+  sign_in_with_apple: ^8.2.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +69,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/garden/
+    - assets/paper/crumple-stages-v1.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

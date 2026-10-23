@@ -129,16 +129,18 @@ class _PatternExplorerCardState extends State<PatternExplorerCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          'S17-P',
+                          'NHỊP LẶP LẠI',
                           style: AppTypography.kicker.copyWith(
                             color: AppColors.purple,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 6,
@@ -149,7 +151,7 @@ class _PatternExplorerCardState extends State<PatternExplorerCard> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            'Mẫu n = $sampleSize',
+                            '$sampleSize ghi nhận',
                             style: AppTypography.caption.copyWith(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -161,7 +163,7 @@ class _PatternExplorerCardState extends State<PatternExplorerCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Khám phá Pattern',
+                      'Điều hay lặp lại',
                       style: AppTypography.titleMedium.copyWith(
                         fontWeight: FontWeight.w700,
                         letterSpacing: -0.2,
@@ -368,7 +370,7 @@ class _PatternExplorerCardState extends State<PatternExplorerCard> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Mindra cần ít nhất 2 đến 3 check-in trong khoảng thời gian này để phản ánh các nhịp điệu tương đối tin cậy. Hãy ghi nhận tự nhiên khi bạn sẵn lòng.',
+            'Moodi cần ít nhất 2 đến 3 check-in trong khoảng thời gian này để phản ánh các nhịp điệu tương đối tin cậy. Hãy ghi nhận tự nhiên khi bạn sẵn lòng.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textMuted,

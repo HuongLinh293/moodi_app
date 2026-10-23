@@ -57,8 +57,12 @@ class _OnboardingViewState extends State<OnboardingView> {
   void _finishOnboarding(MindraState state) {
     MindraMotion.of(state.lowStimulationMode).medium();
     // Save goals
+    // Add first: toggleGoal refuses to remove the last remaining goal.
     for (final goal in _selectedGoals) {
-      if (!state.userGoals.contains(goal)) {
+      if (!state.userGoals.contains(goal)) state.toggleGoal(goal);
+    }
+    for (final goal in _allGoals) {
+      if (!_selectedGoals.contains(goal) && state.userGoals.contains(goal)) {
         state.toggleGoal(goal);
       }
     }
@@ -107,7 +111,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Mindra hoạt động ra sao?',
+                  'Moodi hoạt động ra sao?',
                   style: AppTypography.headlineMedium.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -251,10 +255,10 @@ class _OnboardingViewState extends State<OnboardingView> {
             ),
             const SizedBox(height: 16),
             Text(
-              '• Ghi chép được đồng bộ lên Firebase theo tài khoản, bao gồm tài khoản khách ẩn danh.\n'
-              '• Gợi ý phản tư hiện dựa trên mẫu có sẵn trong ứng dụng, không phải phân tích AI cá nhân.\n'
+              '• Kiểm tra trạng thái đồng bộ của ghi chép. Nội dung chưa đồng bộ có thể chỉ được giữ trong phiên này.\n'
+              '• Gợi ý phản tư hỗ trợ tự nhìn lại cảm xúc, không phải chẩn đoán.\n'
               '• Không bán dữ liệu, không chia sẻ với bên thứ ba cho mục đích quảng cáo.\n'
-              '• Bạn có toàn quyền xuất hoặc xóa vĩnh viễn toàn bộ dữ liệu bất kỳ lúc nào trong phần Cài đặt.',
+              '• Bạn có thể xuất ghi chép trong Cài đặt. Việc xóa dữ liệu trên máy chủ cần kết nối và xác nhận thành công.',
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
                 height: 1.5,
@@ -397,7 +401,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           ),
           const SizedBox(height: 28),
           Text(
-            'Mindra',
+            'Moodi',
             style: AppTypography.displayMedium.copyWith(
               fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
@@ -447,7 +451,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           TextButton(
             onPressed: () => _showHowItWorksModal(context),
             child: Text(
-              'Mindra hoạt động như thế nào?',
+              'Moodi hoạt động như thế nào?',
               style: AppTypography.caption.copyWith(
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w600,
@@ -487,7 +491,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Chọn một hoặc nhiều mục tiêu để Mindra đồng hành cùng bạn.',
+            'Chọn một hoặc nhiều mục tiêu để Moodi đồng hành cùng bạn.',
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -666,7 +670,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Mindra hỗ trợ bạn tự phản tư và quản lý căng thẳng thường ngày.\n\n'
+                  'Moodi hỗ trợ bạn tự phản tư và quản lý căng thẳng thường ngày.\n\n'
                   'Ứng dụng không chẩn đoán tình trạng sức khỏe tinh thần, không cung cấp trị liệu y khoa và không thay thế hỗ trợ chuyên môn.\n\n'
                   'Mọi dữ liệu phản tư hoàn toàn thuộc về bạn và nằm trong tầm kiểm soát của bạn.',
                   style: AppTypography.bodyMedium.copyWith(

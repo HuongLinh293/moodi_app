@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
 import '../core/theme/colors.dart';
 import '../core/theme/typography.dart';
 
@@ -84,7 +86,8 @@ class GardenWeatherAtmosphere extends StatefulWidget {
   });
 
   @override
-  State<GardenWeatherAtmosphere> createState() => _GardenWeatherAtmosphereState();
+  State<GardenWeatherAtmosphere> createState() =>
+      _GardenWeatherAtmosphereState();
 }
 
 class _GardenWeatherAtmosphereState extends State<GardenWeatherAtmosphere>
@@ -149,7 +152,11 @@ class _WeatherStaticPainter extends CustomPainter {
     switch (weather) {
       case GardenWeather.sunny:
         paint.color = const Color(0xFFFFF7D6).withValues(alpha: 0.35);
-        canvas.drawCircle(Offset(size.width * 0.85, size.height * 0.15), 45, paint);
+        canvas.drawCircle(
+          Offset(size.width * 0.85, size.height * 0.15),
+          45,
+          paint,
+        );
         break;
       case GardenWeather.breezy:
         paint.color = const Color(0xFFE0F2FE).withValues(alpha: 0.3);
@@ -178,10 +185,7 @@ class _WeatherDynamicPainter extends CustomPainter {
   final GardenWeather weather;
   final double progress;
 
-  _WeatherDynamicPainter({
-    required this.weather,
-    required this.progress,
-  });
+  _WeatherDynamicPainter({required this.weather, required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -203,7 +207,11 @@ class _WeatherDynamicPainter extends CustomPainter {
     final sunGlow = Paint()
       ..color = const Color(0xFFFDE68A).withValues(alpha: 0.22)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28);
-    canvas.drawCircle(Offset(size.width * 0.82, size.height * 0.12), 48, sunGlow);
+    canvas.drawCircle(
+      Offset(size.width * 0.82, size.height * 0.12),
+      48,
+      sunGlow,
+    );
 
     final sparklePaint = Paint()..style = PaintingStyle.fill;
     const count = 7;
@@ -260,11 +268,7 @@ class _WeatherDynamicPainter extends CustomPainter {
       final alpha = (0.15 + (i % 3) * 0.06).clamp(0.0, 0.28);
 
       rainPaint.color = const Color(0xFF64748B).withValues(alpha: alpha);
-      canvas.drawLine(
-        Offset(x, y),
-        Offset(x - 5.0, y + 14.0),
-        rainPaint,
-      );
+      canvas.drawLine(Offset(x, y), Offset(x - 5.0, y + 14.0), rainPaint);
     }
   }
 

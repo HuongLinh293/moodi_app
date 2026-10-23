@@ -1,8 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../core/theme/colors.dart';
 import '../core/theme/motion.dart';
@@ -80,7 +81,7 @@ class SettingsView extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'Mindra v1.0.0 (MVP+)',
+            'Moodi v1.0.0 (MVP+)',
             style: AppTypography.caption.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w600,
@@ -101,6 +102,17 @@ class SettingsView extends StatelessWidget {
 
   // 0. Tài khoản người dùng
   Widget _buildAccountSection(BuildContext context) {
+    final syncOk =
+        state.failedEntryCount == 0 &&
+        state.pendingEntryCount == 0 &&
+        state.sessionEntryCount == 0;
+    final syncLabel = state.failedEntryCount > 0
+        ? 'Có ghi chép chưa đồng bộ được'
+        : state.pendingEntryCount > 0
+        ? 'Đang đồng bộ…'
+        : state.sessionEntryCount > 0
+        ? 'Có ghi chép chưa được lưu lâu dài'
+        : 'Đã đồng bộ với tài khoản';
     return _buildSectionCard(
       title: 'TÀI KHOẢN & BẢO VỆ',
       icon: Icons.account_circle_outlined,
@@ -141,16 +153,18 @@ class SettingsView extends StatelessWidget {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.mint,
+                        decoration: BoxDecoration(
+                          color: syncOk ? AppColors.mint : AppColors.orange,
                           shape: BoxShape.circle,
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        'Đã đồng bộ & mã hóa an toàn',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textMuted,
+                      Flexible(
+                        child: Text(
+                          syncLabel,
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ),
                     ],
@@ -193,13 +207,15 @@ class SettingsView extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(
-          'Đăng xuất khỏi Mindra?',
+          state.isGuest ? 'Thoát chế độ khách?' : 'Đăng xuất khỏi Moodi?',
           style: AppTypography.titleMedium.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
-          'Bạn sẽ cần đăng nhập lại để truy cập không gian cá nhân và các tính năng đồng bộ.',
+          state.isGuest
+              ? 'Bạn đang dùng chế độ khách. Nếu đăng xuất, toàn bộ ghi chép và khu vườn sẽ mất vĩnh viễn, không thể khôi phục.'
+              : 'Bạn sẽ cần đăng nhập lại để truy cập không gian cá nhân và các tính năng đồng bộ.',
           style: AppTypography.bodySmall,
         ),
         actions: [
@@ -218,12 +234,20 @@ class SettingsView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onPressed: () {
-              Navigator.pop(ctx); // Đóng dialog xác nhận
-              Navigator.of(context).pop(); // Đóng màn hình Cài đặt
-              unawaited(state.logout());
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await state.logout();
+              } catch (_) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Chưa đăng xuất được. Hãy thử lại.'),
+                  ),
+                );
+              }
             },
-            child: const Text('Đăng xuất'),
+            child: Text(state.isGuest ? 'Vẫn đăng xuất' : 'Đăng xuất'),
           ),
         ],
       ),
@@ -237,7 +261,7 @@ class SettingsView extends StatelessWidget {
       'Hiểu cảm xúc của tôi',
       'Giảm căng thẳng hằng ngày',
       'Phản hồi bình tĩnh hơn',
-      'Xây dựng sự kiên cường',
+      'Xây dựng khả năng nhận biết cảm xúc',
     ];
 
     return _buildSectionCard(
@@ -245,7 +269,7 @@ class SettingsView extends StatelessWidget {
       icon: Icons.track_changes_rounded,
       children: [
         Text(
-          'Chọn các điều bạn muốn hướng tới cùng Mindra:',
+          'Chọn các điều bạn muốn hướng tới cùng Moodi:',
           style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
         ),
         const SizedBox(height: 12),
@@ -310,26 +334,29 @@ class SettingsView extends StatelessWidget {
             state.setAiConsent(val);
           },
         ),
-        const Divider(height: 20),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          activeTrackColor: AppColors.ink,
-          title: Text(
-            'Khóa ứng dụng (bản thử nghiệm)',
-            style: AppTypography.bodyMedium.copyWith(
-              fontWeight: FontWeight.w600,
+        // Demo PIN only; hidden from release builds until real Face ID/PIN.
+        if (kDebugMode) ...[
+          const Divider(height: 20),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            activeTrackColor: AppColors.ink,
+            title: Text(
+              'Khóa ứng dụng (bản thử nghiệm)',
+              style: AppTypography.bodyMedium.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            subtitle: Text(
+              'Hiện màn khóa PIN demo 0000 khi mở app. Chưa dùng Face ID thật.',
+              style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+            ),
+            value: state.appLockEnabled,
+            onChanged: (val) {
+              MindraMotion.of(state.lowStimulationMode).selection();
+              state.setAppLockEnabled(val);
+            },
           ),
-          subtitle: Text(
-            'Hiện màn khóa PIN demo 0000 khi mở app. Chưa dùng Face ID thật.',
-            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
-          ),
-          value: state.appLockEnabled,
-          onChanged: (val) {
-            MindraMotion.of(state.lowStimulationMode).selection();
-            state.setAppLockEnabled(val);
-          },
-        ),
+        ],
         const Divider(height: 20),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
@@ -355,7 +382,7 @@ class SettingsView extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           activeTrackColor: AppColors.ink,
           title: Text(
-            'Hiển thị Khu vườn Mindra',
+            'Hiển thị Khu vườn Moodi',
             style: AppTypography.bodyMedium.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -381,7 +408,7 @@ class SettingsView extends StatelessWidget {
       icon: Icons.folder_open_rounded,
       children: [
         Text(
-          'Dữ liệu check-in được lưu trữ an toàn trên thiết bị của bạn.',
+          'Ghi chép được đồng bộ với tài khoản của bạn. Bạn có thể xuất bản sao bất cứ lúc nào.',
           style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
         ),
         const SizedBox(height: 14),
@@ -431,7 +458,7 @@ class SettingsView extends StatelessWidget {
                     color: Colors.red.shade600,
                   ),
                   label: Text(
-                    'Xóa tất cả',
+                    'Xóa nhật ký & hoa',
                     style: AppTypography.bodySmall.copyWith(
                       color: Colors.red.shade700,
                       fontWeight: FontWeight.w600,
@@ -477,7 +504,7 @@ class SettingsView extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Mindra là công cụ tự phản tư nhẹ nhàng, không thay thế chăm sóc y tế hay cấp cứu tâm lý. Nếu bạn đang cảm thấy quá tải hoặc có ý nghĩ làm hại bản thân, xin hãy kết nối ngay với nguồn lực hỗ trợ:',
+            'Moodi là công cụ tự phản tư nhẹ nhàng, không thay thế chăm sóc y tế hay cấp cứu tâm lý. Nếu bạn đang cảm thấy quá tải hoặc có ý nghĩ làm hại bản thân, xin hãy kết nối ngay với nguồn lực hỗ trợ:',
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.ink,
               height: 1.45,
@@ -584,27 +611,33 @@ class SettingsView extends StatelessWidget {
     required IconData icon,
     required List<Widget> children,
   }) {
+    // Background lives on Material so ListTile ink and tile colors stay visible.
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.cream,
         borderRadius: BorderRadius.circular(22),
         boxShadow: AppShadows.card,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: Material(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 18, color: AppColors.ink),
-              const SizedBox(width: 8),
-              Text(title, style: AppTypography.kicker),
+              Row(
+                children: [
+                  Icon(icon, size: 18, color: AppColors.ink),
+                  const SizedBox(width: 8),
+                  Text(title, style: AppTypography.kicker),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ...children,
             ],
           ),
-          const SizedBox(height: 14),
-          ...children,
-        ],
+        ),
       ),
     );
   }
@@ -630,28 +663,22 @@ class SettingsView extends StatelessWidget {
         .toList();
 
     final jsonStr = const JsonEncoder.withIndent('  ').convert(dataList);
-    Clipboard.setData(ClipboardData(text: jsonStr));
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Text(
-          'Xuất dữ liệu thành công',
-          style: AppTypography.titleMedium.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: Text(
-          'Đây là bản thử nghiệm. ${dataList.length} lượt check-in đã được sao chép dưới dạng JSON. Chia sẻ file thật sẽ được thêm sau.',
-          style: AppTypography.bodySmall,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Đóng', style: TextStyle(color: AppColors.ink)),
+    final box = context.findRenderObject() as RenderBox?;
+    final date = DateTime.now().toIso8601String().substring(0, 10);
+    // Share sheet instead of clipboard: other apps can read the clipboard.
+    SharePlus.instance.share(
+      ShareParams(
+        files: [
+          XFile.fromData(
+            Uint8List.fromList(utf8.encode(jsonStr)),
+            mimeType: 'application/json',
           ),
         ],
+        fileNameOverrides: ['moodi-nhat-ky-$date.json'],
+        subject: 'Nhật ký Moodi',
+        sharePositionOrigin: box == null
+            ? null
+            : box.localToGlobal(Offset.zero) & box.size,
       ),
     );
   }
@@ -664,14 +691,14 @@ class SettingsView extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(
-          'Xóa toàn bộ dữ liệu?',
+          'Xóa nhật ký và hoa?',
           style: AppTypography.titleMedium.copyWith(
             fontWeight: FontWeight.w700,
             color: Colors.red.shade700,
           ),
         ),
         content: Text(
-          'Hành động này sẽ xóa vĩnh viễn tất cả các bản ghi cảm xúc và đánh giá tuần trên thiết bị. Không thể hoàn tác.',
+          'Hành động này sẽ xóa vĩnh viễn mọi ghi chép cảm xúc và hoa trong vườn của bạn khỏi tài khoản và thiết bị. Những bông hoa bạn đã gửi vào vườn sẻ chia hiện tại cũng được gỡ. Bài cộng đồng và tin nhắn không thuộc thao tác này. Không thể hoàn tác.',
           style: AppTypography.bodySmall,
         ),
         actions: [
@@ -690,12 +717,24 @@ class SettingsView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              state.clearAllData();
-              ScaffoldMessenger.of(context).showSnackBar(
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await state.deleteAllUserData();
+              } catch (_) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Chưa xóa được dữ liệu. Kiểm tra kết nối và thử lại.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              messenger.showSnackBar(
                 SnackBar(
-                  content: const Text('Đã xóa toàn bộ dữ liệu trên thiết bị'),
+                  content: const Text('Đã xóa nhật ký và hoa của bạn'),
                   backgroundColor: AppColors.ink,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(

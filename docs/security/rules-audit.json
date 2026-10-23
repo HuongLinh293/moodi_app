@@ -1,0 +1,24 @@
+{
+  "score": 4,
+  "summary": "Prototype rules sau gia cố: owner/member scoping, schema create/update và các giao dịch chính được kiểm thử trên Emulator. Điểm là đánh giá tĩnh trong phạm vi, không phải chứng nhận bảo mật production.",
+  "findings": [
+    {
+      "check": "Temporal accuracy",
+      "severity": "minor",
+      "issue": "Timestamp legacy do client cung cấp dưới dạng chuỗi; không phải thời gian server đáng tin.",
+      "recommendation": "Không dùng trường này cho quyết định cấp quyền hoặc chứng cứ chống chối bỏ; cân nhắc migration timestamp server khi cần."
+    },
+    {
+      "check": "Schema compatibility",
+      "severity": "minor",
+      "issue": "Dữ liệu cũ sai schema có thể không cập nhật được khi bật rules mới.",
+      "recommendation": "Kiểm kê dữ liệu và chuẩn bị migration trước khi deploy; không nới rules để bỏ qua sai dữ liệu."
+    },
+    {
+      "check": "Invitation lifecycle",
+      "severity": "minor",
+      "issue": "Mã mời được xoay khi rời vườn nhưng chưa có thời hạn tự hết hiệu lực.",
+      "recommendation": "Cân nhắc TTL khi mở rộng phạm vi; mã mời hiện là capability, không được công khai."
+    }
+  ]
+}

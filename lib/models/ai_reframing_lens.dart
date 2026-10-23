@@ -1,8 +1,4 @@
-enum ReframingLensType {
-  compassion,
-  growth,
-  zoomOut,
-}
+enum ReframingLensType { compassion, growth, zoomOut }
 
 class ReframingLens {
   final ReframingLensType type;
@@ -34,7 +30,8 @@ class ReframingLens {
       type: ReframingLensType.zoomOut,
       label: 'Thu phóng',
       emoji: '🔭',
-      description: 'Nhìn từ tương lai và tập trung vào điều mình kiểm soát được',
+      description:
+          'Nhìn từ tương lai và tập trung vào điều mình kiểm soát được',
     ),
   ];
 

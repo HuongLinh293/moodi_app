@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,11 +10,11 @@ import 'package:mindra/state/mindra_state.dart';
 
 class FailedGuestAuth extends AuthRepository {
   @override
-  User? get currentUser => null;
+  AuthUser? get currentUser => null;
   @override
-  Stream<User?> get authStateChanges => const Stream.empty();
+  Stream<AuthUser?> get authStateChanges => const Stream.empty();
   @override
-  Future<UserCredential?> signInAnonymously() async => null;
+  Future<AuthResponse?> signInAnonymously() async => null;
 }
 
 void main() {
@@ -42,7 +41,7 @@ void main() {
     },
   );
 
-  testWidgets('Failed guest sign-in never authenticates a local fallback', (
+  testWidgets('API login does not expose unsupported guest sign-in', (
     tester,
   ) async {
     final state = MindraState(authRepository: FailedGuestAuth());
@@ -54,19 +53,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final guest = find.text('Tiếp tục không cần tài khoản');
-    await tester.ensureVisible(guest);
-    await tester.tap(guest);
-    await tester.pumpAndSettle();
+    expect(find.text('Tiếp tục không cần tài khoản'), findsNothing);
     expect(state.isAuthenticated, isFalse);
-    expect(
-      find.text('Chưa mở được phiên khách. Kiểm tra kết nối và thử lại.'),
-      findsOneWidget,
-    );
+    expect(find.text('Email'), findsOneWidget);
   });
 
   testWidgets('Quick save closes without a garden dialog', (tester) async {
-    final state = MindraState(authRepository: FailedGuestAuth());
+    final state = MindraState(authRepository: FailedGuestAuth())
+      ..selectEmotion('calm');
     addTearDown(state.dispose);
     var closed = false;
     await tester.pumpWidget(

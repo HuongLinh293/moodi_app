@@ -54,7 +54,7 @@ class GardenMoment {
       if (raw is int) return DateTime.fromMillisecondsSinceEpoch(raw);
       if (raw is String) {
         final parsed = DateTime.tryParse(raw);
-        if (parsed != null) return parsed;
+        if (parsed != null) return parsed.toLocal();
       }
       try {
         final dynamic d = raw;
