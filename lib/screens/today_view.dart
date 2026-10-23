@@ -224,12 +224,18 @@ class TodayView extends StatelessWidget {
                               color: contentTextColor.withValues(alpha: 0.5),
                             ),
                             const SizedBox(width: 4),
-                            Text(
-                              'Chạm để bắt đầu',
-                              style: AppTypography.caption.copyWith(
-                                color: contentTextColor.withValues(alpha: 0.5),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
+                            Flexible(
+                              child: Text(
+                                'Chạm để bắt đầu',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.caption.copyWith(
+                                  color: contentTextColor.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
                               ),
                             ),
                           ],
