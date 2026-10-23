@@ -36,8 +36,11 @@ class SocialSignIn {
     defaultValue:
         '1017414745880-gg3005b3ngf3a2el8oam9dm1s3i3spf2.apps.googleusercontent.com',
   );
+  // Web client ID (client_type 3 trong google-services.json).
   static const googleServerClientId = String.fromEnvironment(
     'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue:
+        '1017414745880-1900dn539ep4kg24g9d4v5oe4eroh2p7.apps.googleusercontent.com',
   );
   static const appleEnabled = bool.fromEnvironment('APPLE_SIGN_IN');
 
