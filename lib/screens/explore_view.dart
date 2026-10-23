@@ -22,7 +22,7 @@ class ExploreView extends StatefulWidget {
 }
 
 class _ExploreViewState extends State<ExploreView> {
-  int _section = 1;
+  int _section = 0;
 
   @override
   Widget build(BuildContext context) {
