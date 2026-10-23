@@ -929,7 +929,10 @@ class _HomeShellState extends State<HomeShell> {
               ),
             ),
           ),
-          body: PracticeView(state: state),
+          body: PracticeView(
+            state: state,
+            onOpenPause: () => _openPauseModeModal(context, state),
+          ),
         ),
       ),
     );
@@ -957,6 +960,7 @@ class _HomeShellState extends State<HomeShell> {
         return ExploreView(
           state: state,
           onOpenCheckin: () => _openCheckinModal(context, state),
+          onOpenPause: () => _openPauseModeModal(context, state),
         );
       default:
         return TodayView(
