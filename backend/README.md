@@ -27,10 +27,8 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-### 4. Chạy Migrations
-```bash
-npm run migration:run
-```
+### 4. Migrations
+Không cần chạy riêng: ngoài production, schema tự đồng bộ và migration tự chạy khi server khởi động (`migrationsRun: true` trong `src/config/database.config.ts`).
 
 ### 5. Seed dữ liệu test (tùy chọn)
 ```bash

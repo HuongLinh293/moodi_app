@@ -59,6 +59,7 @@ class _PersonalSpaceViewState extends State<PersonalSpaceView> {
           child: _buildSectionSwitcher(),
         ),
         Expanded(
+          // IndexedStack giữ trạng thái (tháng, ngày đang chọn) khi chuyển mục.
           child: IndexedStack(
             index: _section,
             children: [

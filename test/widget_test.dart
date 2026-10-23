@@ -116,11 +116,10 @@ void main() {
 
     await tester.tap(find.text('Khám phá').last);
     await tester.pumpAndSettle();
-    expect(find.text('Thực hành'), findsOneWidget);
-    expect(find.text('Bắt đầu viết'), findsOneWidget);
-    await tester.tap(find.text('Tiến trình'));
-    await tester.pumpAndSettle();
     expect(find.text('TIẾN TRÌNH CỦA BẠN'), findsOneWidget);
+    await tester.tap(find.text('Thực hành'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bắt đầu viết'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

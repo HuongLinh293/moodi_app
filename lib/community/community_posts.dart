@@ -4,9 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../core/http_client.dart';
 import '../core/theme/colors.dart';
 import '../core/theme/typography.dart';
 import '../widgets/airmail_border.dart';
+import '../widgets/crisis_support.dart';
 import 'community_repository.dart';
 import 'community_widgets.dart';
 import 'community_people.dart';
@@ -147,6 +149,11 @@ class _CommunityComposerState extends State<CommunityComposer> {
           busy = false;
           error = CommunityRepository.error(e);
         });
+        // Server chỉ dùng failed-precondition khi bài công khai có tín hiệu
+        // khủng hoảng: mời người dùng tới nguồn hỗ trợ thay vì chỉ báo lỗi.
+        if (e is ApiException && e.code == 'failed-precondition') {
+          showCrisisSupportSheet(context);
+        }
       }
     }
   }

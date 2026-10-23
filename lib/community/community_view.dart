@@ -60,6 +60,7 @@ class _CommunityViewState extends State<CommunityView> {
     load();
     updates = Timer.periodic(const Duration(seconds: 25), (_) {
       if (mounted &&
+          widget.state.currentTab == 2 &&
           (ModalRoute.of(context)?.isCurrent ?? false) &&
           WidgetsBinding.instance.lifecycleState != AppLifecycleState.paused) {
         load();

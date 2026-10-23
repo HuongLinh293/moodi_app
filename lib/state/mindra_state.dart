@@ -5,6 +5,7 @@ import '../repositories/post_repository.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/garden_layout.dart';
+import '../core/reminder_service.dart';
 import '../models/ai_reflection.dart';
 import '../models/badge_item.dart';
 import '../models/emotion.dart';
@@ -30,6 +31,7 @@ class MindraState extends ChangeNotifier {
   final ReflectionRepository _reflectionRepository;
   final SharedGardenRepository _sharedGardenRepository;
   final UserRepository _userRepository;
+  final ReminderService _reminderService;
 
   StreamSubscription<AuthUser?>? _authSubscription;
   StreamSubscription<List<JournalEntry>>? _entriesSubscription;
@@ -60,6 +62,7 @@ class MindraState extends ChangeNotifier {
     ReflectionRepository? reflectionRepository,
     SharedGardenRepository? sharedGardenRepository,
     UserRepository? userRepository,
+    ReminderService? reminderService,
     List<JournalEntry>? initialEntries,
     List<MicroGoal>? initialMicroGoals,
     bool? isAuthenticated,
@@ -69,7 +72,8 @@ class MindraState extends ChangeNotifier {
        _reflectionRepository = reflectionRepository ?? ReflectionRepository(),
         _sharedGardenRepository =
             sharedGardenRepository ?? SharedGardenRepository(),
-        _userRepository = userRepository ?? UserRepository() {
+        _userRepository = userRepository ?? UserRepository(),
+        _reminderService = reminderService ?? ReminderService() {
     if (initialEntries != null && initialEntries.isNotEmpty) {
       _entries.addAll(initialEntries);
       final entry = _entryForDay(DateTime.now());
@@ -1164,14 +1168,36 @@ class MindraState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setReminderEnabled(bool val) {
-    _reminderEnabled = val;
+  /// Đọc lại nhắc nhở đang lên lịch trong hệ điều hành (gọi khi mở app).
+  Future<void> loadReminder() async {
+    final time = await _reminderService.load();
+    _reminderEnabled = time != null;
+    if (time != null) _reminderTime = time;
     notifyListeners();
   }
 
-  void setReminderTime(String val) {
+  /// Trả false khi người dùng không cấp quyền thông báo.
+  Future<bool> setReminderEnabled(bool val) async {
+    if (val) {
+      try {
+        if (!await _reminderService.schedule(_reminderTime)) return false;
+      } catch (e) {
+        debugPrint('MindraState: schedule reminder error: $e');
+        return false;
+      }
+    } else {
+      await _reminderService.cancel();
+    }
+    _reminderEnabled = val;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> setReminderTime(String val) async {
     _reminderTime = val;
     notifyListeners();
+    if (!_reminderEnabled) return true;
+    return setReminderEnabled(true);
   }
 
   void toggleGoal(String goal) {

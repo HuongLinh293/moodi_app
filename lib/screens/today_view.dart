@@ -213,6 +213,35 @@ class TodayView extends StatelessWidget {
                         ),
                       ),
 
+                    if (awaitingChoice)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.touch_app_outlined,
+                              size: 14,
+                              color: contentTextColor.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Chạm để bắt đầu',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.caption.copyWith(
+                                  color: contentTextColor.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     LayoutBuilder(
                       builder: (context, constraints) => Wrap(
                         spacing: 10,
@@ -451,46 +480,22 @@ class TodayView extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 10, bottom: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(
-                child: Text(
-                  'TIỆN ÍCH THƯ GIÃN',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.kicker.copyWith(
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Kéo ngang',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 12,
-                    color: AppColors.textMuted,
-                  ),
-                ],
-              ),
-            ],
+          child: Text(
+            'TIỆN ÍCH THƯ GIÃN',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.kicker.copyWith(
+              color: AppColors.textSecondary,
+              letterSpacing: 0.8,
+            ),
           ),
         ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           physics: motion.scrollPhysics,
           clipBehavior: Clip.none,
+          // Padding phải nhỏ hơn width card để card cuối lộ ~20px → hint scroll
+          padding: const EdgeInsets.only(right: 22),
           child: Row(
             children: [
               _UtilityCard(
@@ -554,7 +559,9 @@ class TodayView extends StatelessWidget {
   Widget _buildGardenPreview(MindraState state) {
     final monthKey = state.currentGardenMonthKey();
     final moments = state.momentsInMonth(monthKey);
-    final previewBed = state.bedsInMonth(monthKey).first;
+    final beds = state.bedsInMonth(monthKey);
+    if (beds.isEmpty) return const SizedBox.shrink();
+    final previewBed = beds.first;
 
     return Container(
       padding: const EdgeInsets.all(14),

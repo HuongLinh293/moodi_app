@@ -10,11 +10,13 @@ import 'progress_view.dart';
 class ExploreView extends StatefulWidget {
   final MindraState state;
   final VoidCallback onOpenCheckin;
+  final VoidCallback onOpenPause;
 
   const ExploreView({
     super.key,
     required this.state,
     required this.onOpenCheckin,
+    required this.onOpenPause,
   });
 
   @override
@@ -22,7 +24,7 @@ class ExploreView extends StatefulWidget {
 }
 
 class _ExploreViewState extends State<ExploreView> {
-  int _section = 1;
+  int _section = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +43,10 @@ class _ExploreViewState extends State<ExploreView> {
                 state: widget.state,
                 onOpenCheckin: widget.onOpenCheckin,
               ),
-              PracticeView(state: widget.state),
+              PracticeView(
+                state: widget.state,
+                onOpenPause: widget.onOpenPause,
+              ),
             ],
           ),
         ),

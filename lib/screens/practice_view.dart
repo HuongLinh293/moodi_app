@@ -10,8 +10,13 @@ import 'practice_session.dart';
 
 class PracticeView extends StatefulWidget {
   final MindraState state;
+  final VoidCallback onOpenPause;
 
-  const PracticeView({super.key, required this.state});
+  const PracticeView({
+    super.key,
+    required this.state,
+    required this.onOpenPause,
+  });
 
   @override
   State<PracticeView> createState() => _PracticeViewState();
@@ -191,7 +196,7 @@ class _PracticeViewState extends State<PracticeView> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              'KHOẢNG DỪNG · 1 PHÚT',
+              'KHOẢNG DỪNG · 30 GIÂY',
               style: AppTypography.kicker.copyWith(
                 color: AppColors.orange,
                 fontWeight: FontWeight.w800,
@@ -227,7 +232,7 @@ class _PracticeViewState extends State<PracticeView> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              onPressed: () => _openSession(_pauseConfig),
+              onPressed: widget.onOpenPause,
               icon: const Icon(Icons.play_arrow_rounded, size: 20),
               label: Text(
                 'Bắt đầu dừng lại',
@@ -394,17 +399,6 @@ class _CatalogItem {
     required this.config,
   });
 }
-
-const _pauseConfig = PracticeSessionConfig(
-  id: 'pause',
-  title: 'Khoảng dừng 60 giây',
-  purpose:
-      'Dừng lại, thở chậm, rồi chọn một bước nhỏ tiếp theo khi đã dịu hơn.',
-  durationLabel: '1 phút',
-  accent: AppColors.orange,
-  kind: PracticeKind.breath,
-  breath: BreathPattern(inhaleSec: 4, holdSec: 2, exhaleSec: 6, totalCycles: 5),
-);
 
 List<_CatalogItem> _buildCatalog() => [
   _CatalogItem(
