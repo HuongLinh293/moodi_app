@@ -48,15 +48,8 @@ class TodayView extends StatelessWidget {
         AppColors.facePalette['calm']!;
     final faceBackground = facePaletteColors[0];
     final faceStroke = facePaletteColors[1];
-    final quickEmotionKeys = const [
-      'calm',
-      'happy',
-      'stressed',
-      'sad',
-      'anxious',
-      'angry',
-      'tired',
-    ];
+    // Cùng danh sách với màn check-in để cảm xúc đã chọn luôn hiện ở đây.
+    const quickEmotionKeys = MindraEmotions.primaryKeys;
     final suggestion = _suggestionFor(selectedKey);
     final motion = MindraMotion.of(state.lowStimulationMode);
 

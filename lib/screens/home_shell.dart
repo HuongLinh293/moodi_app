@@ -42,7 +42,7 @@ class _HomeShellState extends State<HomeShell> {
       appBar: PreferredSize(
         // PreferredSize must include the status-bar inset because the custom
         // app bar also uses SafeArea internally.
-        preferredSize: Size.fromHeight(80 + MediaQuery.paddingOf(context).top),
+        preferredSize: Size.fromHeight(64 + MediaQuery.paddingOf(context).top),
         child: _buildFlexibleAppBar(context, state, currentTab, motion),
       ),
       body: Column(
@@ -77,7 +77,7 @@ class _HomeShellState extends State<HomeShell> {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
         child: AnimatedSwitcher(
           duration: motion.duration,
           child: KeyedSubtree(
@@ -88,7 +88,7 @@ class _HomeShellState extends State<HomeShell> {
                     constraints.maxWidth < 380 ||
                     MediaQuery.textScalerOf(context).scale(14) > 20;
                 return SizedBox(
-                  height: 64,
+                  height: 52,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -285,8 +285,8 @@ class _HomeShellState extends State<HomeShell> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Streak indicator (ở tab Hôm nay)
-        if (currentTab == 0)
+        // Streak indicator (ở tab Hôm nay); ẩn khi chưa có chuỗi để không tạo áp lực.
+        if (currentTab == 0 && state.consecutiveDays > 0)
           Semantics(
             label: 'Chuỗi hiện diện: ${state.consecutiveDays} ngày',
             child: Padding(
@@ -1138,7 +1138,7 @@ class _HomeShellState extends State<HomeShell> {
         boxShadow: AppShadows.chip,
       ),
       child: Container(
-        height: 52,
+        height: 44,
         padding: padding,
         child: Center(widthFactor: 1.0, child: child),
       ),
