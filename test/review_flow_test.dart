@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +20,8 @@ class FailedGuestAuth extends AuthRepository {
 
 void main() {
   GoogleFonts.config.allowRuntimeFetching = false;
+  // Không đọc Keychain thật: khôi phục phiên trả về ngay "chưa đăng nhập".
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   testWidgets(
     'Onboarding has three steps and no nonfunctional reminder setup',
     (tester) async {
@@ -82,6 +85,7 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(state.entries, hasLength(1));
     expect(state.gardenMoments, isEmpty);
-    expect(find.text('Giữ trong vườn'), findsOneWidget);
+    // HomeShell hỏi giữ hoa bằng sheet; snackbar không hỏi lại.
+    expect(find.text('Giữ trong vườn'), findsNothing);
   });
 }

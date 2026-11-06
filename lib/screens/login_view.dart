@@ -62,6 +62,7 @@ class _LoginViewState extends State<LoginView>
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
 
   bool _isRegisterMode = false;
   bool _isLoading = false;
@@ -95,6 +96,7 @@ class _LoginViewState extends State<LoginView>
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _confirmPassCtrl.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
@@ -124,7 +126,13 @@ class _LoginViewState extends State<LoginView>
     try {
       // MindraApp chuyển sang Home khi luồng đăng nhập phát user mới.
       if (_isRegisterMode) {
-        await state.register(email, pass, email.split('@').first);
+        // Tên tùy chọn; để trống thì dùng phần trước @ như trước đây.
+        final name = _nameCtrl.text.trim();
+        await state.register(
+          email,
+          pass,
+          name.isEmpty ? email.split('@').first : name,
+        );
       } else {
         await state.login(email, pass);
       }
@@ -191,7 +199,8 @@ class _LoginViewState extends State<LoginView>
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    final social = context.watch<MindraState>().socialProviders;
+    final state = context.watch<MindraState>();
+    final social = state.socialProviders;
     return Scaffold(
       backgroundColor: AppColors.paper,
       body: SafeArea(
@@ -214,6 +223,10 @@ class _LoginViewState extends State<LoginView>
                       key: _formKey,
                       child: Column(
                         children: [
+                          if (_isRegisterMode) ...[
+                            _buildNameField(),
+                            const SizedBox(height: 14),
+                          ],
                           _buildEmailField(),
                           const SizedBox(height: 14),
                           _buildPasswordField(),
@@ -235,7 +248,25 @@ class _LoginViewState extends State<LoginView>
                     const SizedBox(height: 16),
                     // ── Toggle Mode ──
                     _buildToggleMode(),
-                    // ── Google & Apple: chỉ hiện khi app và server đã cấu hình ──
+                    if (state.socialProvidersUnavailable) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Chưa kết nối được dịch vụ đăng nhập.',
+                        textAlign: TextAlign.center,
+                      ),
+                      TextButton.icon(
+                        onPressed: state.loadingSocialProviders
+                            ? null
+                            : state.loadSocialProviders,
+                        icon: const Icon(Icons.refresh),
+                        label: Text(
+                          state.loadingSocialProviders
+                              ? 'Đang kết nối…'
+                              : 'Thử kết nối lại',
+                        ),
+                      ),
+                    ],
+                    // Provider availability is retained during temporary outages.
                     if (social.google || social.apple) ...[
                       const SizedBox(height: 24),
                       _buildDivider(),
@@ -284,6 +315,17 @@ class _LoginViewState extends State<LoginView>
           style: AppTypography.bodyLarge,
         ),
       ],
+    );
+  }
+
+  Widget _buildNameField() {
+    return _InputField(
+      controller: _nameCtrl,
+      label: 'Tên hiển thị (không bắt buộc)',
+      hint: 'Tên bạn muốn Moodi gọi',
+      textInputAction: TextInputAction.next,
+      validator: (v) =>
+          (v ?? '').trim().length > 40 ? 'Tên tối đa 40 ký tự' : null,
     );
   }
 

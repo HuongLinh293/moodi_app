@@ -54,23 +54,8 @@ API Docs: `http://localhost:3000/docs`
 - `GET /api/users/:id` - Lấy hồ sơ
 - `PATCH /api/users/:id` - Cập nhật hồ sơ
 
-### Posts (TODO)
-- `GET /api/posts` - Danh sách bài
-- `POST /api/posts` - Tạo bài
-- `PATCH /api/posts/:id` - Sửa bài
-- `DELETE /api/posts/:id` - Xoá bài
-
-### Groups (TODO)
-- `GET /api/groups` - Danh sách nhóm
-- `POST /api/groups` - Tạo nhóm
-
-### Friends (TODO)
-- `GET /api/friends` - Danh sách bạn
-- `POST /api/friends/requests` - Gửi lời kết bạn
-
-### Chat (TODO)
-- `GET /api/chat/conversations` - Danh sách chat
-- `WS /api/chat` - WebSocket realtime
+### Cộng đồng
+- `POST /api/community` - Một cổng duy nhất cho bài viết, bình luận, đồng cảm, nhóm, bạn bè, tin nhắn, thông báo, báo cáo và kiểm duyệt (`{ action, ... }`)
 
 ### Storage (TODO)
 - `POST /api/storage/upload` - Upload ảnh
@@ -82,10 +67,11 @@ API Docs: `http://localhost:3000/docs`
 src/
 ├── auth/              # Authentication module
 ├── users/             # User profiles
-├── posts/             # Posts module
-├── groups/            # Groups module
-├── friends/           # Friends module
-├── chat/              # Chat module
+├── community/         # Cộng đồng (bài viết, nhóm, bạn bè, tin nhắn, kiểm duyệt)
+├── entries/           # Nhật ký
+├── moments/           # Khoảnh khắc khu vườn
+├── reflections/       # Phản tư AI/CBT
+├── shared-gardens/    # Vườn chung 2 người
 ├── storage/           # File storage
 ├── notifications/     # Notifications
 ├── common/            # Decorators, filters, etc

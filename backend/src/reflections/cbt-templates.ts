@@ -65,6 +65,39 @@ export const CRISIS_KEYWORDS = [
   'end it all',
 ];
 
+// Bản gõ không dấu (kiểu nhắn tin). Chỉ giữ cụm không trùng nghĩa thông dụng:
+// cố ý bỏ "tu tu" (= "từ từ") và "tu van" (= "tư vấn") để không báo động nhầm.
+export const CRISIS_KEYWORDS_UNACCENTED = [
+  'tu sat',
+  'muon chet',
+  'khong muon song',
+  'khong con muon song',
+  'ket lieu',
+  'tu hai',
+  'tu lam dau',
+  'ton thuong ban than',
+  'cat tay',
+  'cat co tay',
+  'uong thuoc qua lieu',
+  'chet di cho ranh',
+];
+
+const stripVietnamese = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd');
+
+/** Phát hiện tín hiệu khủng hoảng, kể cả khi người dùng gõ không dấu. */
+export function hasCrisisSignal(...texts: string[]): boolean {
+  // NFC: văn bản dạng tổ hợp rời (NFD) vẫn khớp danh sách có dấu.
+  const lower = texts.join(' ').normalize('NFC').toLowerCase();
+  if (CRISIS_KEYWORDS.some((keyword) => lower.includes(keyword))) return true;
+  // So khớp theo ranh giới từ để "cat tay" không khớp giữa một từ dài hơn.
+  const plain = ` ${stripVietnamese(lower).replace(/[^a-z0-9]+/g, ' ')} `;
+  return CRISIS_KEYWORDS_UNACCENTED.some((keyword) => plain.includes(` ${keyword} `));
+}
+
 // Template CBT dự phòng theo emotionKey (port từ functions/index.js).
 export const CBT_TEMPLATES: Record<string, CbtTemplate> = {
   stressed: {

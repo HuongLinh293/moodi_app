@@ -27,7 +27,7 @@ import {
 } from "./community.entities";
 import { User } from "../users/entities/user.entity";
 import { Notification } from "../notifications/entities/notification.entity";
-import { CRISIS_KEYWORDS } from "../reflections/cbt-templates";
+import { hasCrisisSignal } from "../reflections/cbt-templates";
 
 // Port từ functions/community.js (Firebase callable) sang Postgres.
 // Giữ nguyên hợp đồng action/payload để UI Flutter không phải đổi.
@@ -233,11 +233,15 @@ const profileOut = (p: CommunityProfile) => ({
   bio: p.bio,
   handle: p.handle,
 });
-const relationOut = (r: Relation) => ({
+// Chỉ cho biết người xem đã chặn ai; không để lộ việc mình bị người khác chặn.
+const relationOut = (r: Relation, viewer: string) => ({
   members: r.members,
   requestedBy: r.requestedBy,
   status: r.status,
-  blockedBy: r.blockedBy,
+  blockedBy: r.blockedBy.filter((x) => x === viewer),
+  // Có tương tác được không (bất kể bên nào chặn), để app khóa nút gửi mà
+  // không cần biết ai đã chặn ai.
+  canInteract: r.blockedBy.length === 0,
   hasMessages: r.hasMessages,
   lastSender: r.lastSender ?? null,
   lastMessageAt: millis(r.lastMessageAt),
@@ -335,8 +339,7 @@ export class CommunityService {
   }
 
   private needsSupport(text: string): boolean {
-    const normalized = text.toLowerCase();
-    return CRISIS_KEYWORDS.some((keyword) => normalized.includes(keyword));
+    return hasCrisisSignal(text);
   }
 
   private async charge(uid: string, write: boolean) {
@@ -491,11 +494,14 @@ export class CommunityService {
         lastSender: r.lastSender ?? null,
         lastMessageAt: r.lastMessageAt ?? null,
       });
-    const unblocked = (r: Relation) =>
+    const unblocked = (r: Relation) => {
       check(
-        r.blockedBy.length === 0,
-        "Không thể tương tác khi một trong hai người đã chặn.",
+        !r.blockedBy.includes(uid),
+        "Bạn đã chặn người này. Bỏ chặn để tương tác.",
       );
+      // Bên kia chặn mình: báo chung chung, không nói rõ là bị chặn.
+      check(r.blockedBy.length === 0, "Không thể thực hiện thao tác này.");
+    };
     const spaceAccess = async (space: string) => {
       id(space);
       if (space === "public") return null;
@@ -506,23 +512,35 @@ export class CommunityService {
       );
       return group!;
     };
-    const postAccess = async () => {
+    // Chủ nhóm (trong nhóm của mình) và admin phải luôn thấy bài để kiểm duyệt;
+    // việc chặn không được dùng để né kiểm duyệt.
+    const moderates = (group: CommunityGroup | null) =>
+      isAdmin || (!!group && group.owner === uid);
+    // hideBlocked = true khi xem hoặc tương tác: chặn theo cả hai chiều, với
+    // người bị chặn bài trông như đã gỡ. Xóa và báo cáo truyền false để người
+    // dùng vẫn gỡ được bình luận của mình và vẫn báo cáo được nội dung xấu.
+    const postAccess = async (hideBlocked = true) => {
       const group = await spaceAccess(d.space);
       const post = await m.findOne(CommunityPost, {
         where: { space: d.space, id: id(d.postId) },
       });
       if (!post || post.deleted || post.ready === false)
         fail("not-found", "Bài viết đã được gỡ.");
-      if (post!.author !== uid) {
+      if (hideBlocked && post!.author !== uid && !moderates(group)) {
         const rel = await relation(post!.author);
-        check(!rel.blockedBy.includes(uid), "Bạn đã chặn tác giả này.");
+        if (rel.blockedBy.length) fail("not-found", "Bài viết đã được gỡ.");
       }
       return { group, post: post! };
     };
-    const hiddenAuthors = async () => {
-      const blocked = await qb(CommunityConnection)
-        .where(":uid = ANY(x.blockedBy)", { uid })
-        .getMany();
+    // Người kiểm duyệt chỉ ẩn những người chính họ đã chặn; người dùng thường
+    // ẩn theo cả hai chiều.
+    const hiddenAuthors = async (moderator: boolean) => {
+      const query = qb(CommunityConnection).where(":uid = ANY(x.members)", {
+        uid,
+      });
+      if (moderator) query.andWhere(":uid = ANY(x.blockedBy)", { uid });
+      else query.andWhere("cardinality(x.blockedBy) > 0");
+      const blocked = await query.getMany();
       return [
         ...new Set(blocked.flatMap((r) => r.members.filter((x) => x !== uid))),
       ];
@@ -638,7 +656,7 @@ export class CommunityService {
           out = {
             profile: p,
             relation:
-              d.target === uid ? null : relationOut(await relation(d.target)),
+              d.target === uid ? null : relationOut(await relation(d.target), uid),
           };
           break;
         }
@@ -686,7 +704,7 @@ export class CommunityService {
           if (d.author)
             query.andWhere("x.author = :author", { author: d.author });
           if (d.mood) query.andWhere("x.mood = :mood", { mood: d.mood });
-          const hidden = await hiddenAuthors();
+          const hidden = await hiddenAuthors(moderates(group));
           if (hidden.length)
             query.andWhere("x.author NOT IN (:...hidden)", { hidden });
           out = await this.page(query, d.cursor, postOut);
@@ -767,7 +785,9 @@ export class CommunityService {
         case "comment":
         case "comments":
         case "deleteComment": {
-          const { group, post } = await postAccess();
+          const { group, post } = await postAccess(
+            d.action !== "deletePost" && d.action !== "deleteComment",
+          );
           const key = { space: d.space, id: post.id };
           if (d.action === "deletePost") {
             check(post.author === uid || group?.owner === uid || isAdmin);
@@ -776,8 +796,7 @@ export class CommunityService {
               text: "",
               imagePath: "",
             });
-            if (post.imagePath)
-              await m.delete(CommunityMedia, { path: post.imagePath });
+            if (post.imagePath) await this.releaseMedia(m, post.imagePath);
           } else if (d.action === "toggleComments") {
             check(post.author === uid);
             if (typeof d.enabled !== "boolean")
@@ -802,7 +821,18 @@ export class CommunityService {
                   createdAt: stamp,
                 });
               else await m.delete(CommunityReaction, reactionKey);
-              if (d.enabled)
+              // Bật/tắt lại không gửi thêm thông báo: mỗi người một lần mỗi bài.
+              const notifiedBefore =
+                d.enabled &&
+                (await qb(Notification)
+                  .where("x.recipientId = :author AND x.senderId = :uid", {
+                    author: post.author,
+                    uid,
+                  })
+                  .andWhere("x.type = 'community_reaction'")
+                  .andWhere("x.data->>'postId' = :postId", { postId: post.id })
+                  .getExists());
+              if (d.enabled && !notifiedBefore)
                 await notify(
                   post.author,
                   "community_reaction",
@@ -813,6 +843,13 @@ export class CommunityService {
           } else if (d.action === "comment") {
             check(post.commentsOpen, "Tác giả đã tắt bình luận.");
             if (post.author !== uid) unblocked(await relation(post.author));
+            const commentText = str(d.text, 2000, true);
+            if (d.space === "public" && this.needsSupport(commentText)) {
+              fail(
+                "failed-precondition",
+                "Nội dung này có tín hiệu cần hỗ trợ. Hãy giữ riêng hoặc nhắn người bạn tin, đừng đăng công khai.",
+              );
+            }
             const commentId = ownId();
             await m.insert(CommunityComment, {
               space: d.space,
@@ -820,7 +857,7 @@ export class CommunityService {
               id: commentId,
               author: uid,
               authorName: me!.name,
-              text: str(d.text, 2000, true),
+              text: commentText,
               createdAt: stamp,
               deleted: false,
             });
@@ -855,7 +892,7 @@ export class CommunityService {
                 postId: post.id,
               })
               .andWhere("x.deleted = false");
-            const hidden = await hiddenAuthors();
+            const hidden = await hiddenAuthors(moderates(group));
             if (hidden.length)
               query.andWhere("x.author NOT IN (:...hidden)", { hidden });
             out = await this.page(query, d.cursor, (c) => ({
@@ -1041,7 +1078,7 @@ export class CommunityService {
               (!mark || lastMessageAt > mark.at.getTime());
             items.push({
               id: r.id,
-              ...relationOut(r),
+              ...relationOut(r, uid),
               lastMessageAt,
               preview,
               unread,
@@ -1126,7 +1163,7 @@ export class CommunityService {
               .where("x.connectionId = :connectionId", { connectionId })
               .andWhere("x.ready = true");
             out = await this.page(query, d.cursor, messageOut);
-            out.relation = relationOut(r);
+            out.relation = relationOut(r, uid);
             if (!d.cursor)
               await m.save(CommunityRead, { connectionId, uid, at: stamp });
           } else {
@@ -1211,7 +1248,7 @@ export class CommunityService {
             evidence = message!.text;
             imagePath = message!.imagePath || "";
           } else if (d.postId) {
-            const { post } = await postAccess();
+            const { post } = await postAccess(false);
             target = post.author;
             path = `posts/${d.space}/${post.id}`;
             evidence = post.text;
@@ -1292,6 +1329,7 @@ export class CommunityService {
               resolvedAt: stamp,
             },
           );
+          if (report!.imagePath) await this.releaseMedia(m, report!.imagePath);
           await audit(kind, d.reportId);
           break;
         }
@@ -1341,6 +1379,18 @@ export class CommunityService {
         imagePath: "",
       });
     }
-    if (imagePath) await m.delete(CommunityMedia, { path: imagePath });
+    if (imagePath) await this.releaseMedia(m, imagePath);
+  }
+
+  // Chỉ xóa ảnh khi không còn bài/tin nào dùng và không còn báo cáo đang mở
+  // cần ảnh làm bằng chứng; báo cáo được xử lý xong sẽ gọi lại để dọn.
+  private async releaseMedia(m: EntityManager, path: string) {
+    const inUse =
+      (await m.exists(CommunityPost, { where: { imagePath: path } })) ||
+      (await m.exists(CommunityMessage, { where: { imagePath: path } })) ||
+      (await m.exists(CommunityReport, {
+        where: { imagePath: path, status: "open" },
+      }));
+    if (!inUse) await m.delete(CommunityMedia, { path });
   }
 }

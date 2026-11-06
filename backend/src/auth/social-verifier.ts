@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { createHash, timingSafeEqual } from 'crypto';
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
 
@@ -20,6 +20,7 @@ const list = (value?: string) =>
 // Server không bao giờ tin email/sub do client tự khai.
 @Injectable()
 export class SocialVerifier {
+  private readonly logger = new Logger(SocialVerifier.name);
   private googleKeys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
   private appleKeys = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
 
@@ -98,11 +99,15 @@ export class SocialVerifier {
         ...options,
         algorithms: ['RS256'],
         maxTokenAge: '1h',
+        // Đồng hồ server lệch vài giây khiến token vừa cấp có iat "ở tương lai".
+        clockTolerance: '60s',
       });
       if (!payload.sub) throw new Error('missing sub');
       return payload;
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
+      // Chỉ ghi lý do ở server; client nhận thông báo chung.
+      this.logger.warn(`Từ chối ID token: ${(error as Error).message}`);
       throw new UnauthorizedException('Token đăng nhập không hợp lệ hoặc đã hết hạn');
     }
   }

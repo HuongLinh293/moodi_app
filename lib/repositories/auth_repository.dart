@@ -198,8 +198,9 @@ class AuthRepository {
       }
     } catch (e) {
       debugPrint('AuthRepository: socialProviders error: $e');
+      rethrow;
     }
-    return (google: false, apple: false);
+    throw const FormatException('Phản hồi phương thức đăng nhập không hợp lệ.');
   }
 
   /// Đăng nhập Google; trả null khi người dùng huỷ.

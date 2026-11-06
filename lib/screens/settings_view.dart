@@ -411,7 +411,7 @@ class SettingsView extends StatelessWidget {
             ),
           ),
           subtitle: Text(
-            'Gợi ý hiện dựa trên mẫu có sẵn trong ứng dụng. Bạn có thể chỉnh sửa hoặc bỏ qua nội dung chưa phù hợp.',
+            'Khi bật, tình huống và suy nghĩ bạn ghi sẽ được gửi tới máy chủ Moodi và có thể chuyển cho dịch vụ AI (Google Gemini) để tạo gợi ý. Nội dung có dấu hiệu khủng hoảng không được gửi cho AI. Tắt để không tạo gợi ý phản tư.',
             style: AppTypography.caption.copyWith(
               color: AppColors.textMuted,
               height: 1.3,

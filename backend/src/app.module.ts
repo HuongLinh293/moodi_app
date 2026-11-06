@@ -6,10 +6,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { HttpThrottlerGuard } from './common/http-throttler.guard';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { PostsModule } from './posts/posts.module';
-import { GroupsModule } from './groups/groups.module';
-import { FriendsModule } from './friends/friends.module';
-import { ChatModule } from './chat/chat.module';
 import { StorageModule } from './storage/storage.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EntriesModule } from './entries/entries.module';
@@ -32,10 +28,8 @@ import { databaseConfig } from './config/database.config';
     ]),
     AuthModule,
     UsersModule,
-    PostsModule,
-    GroupsModule,
-    FriendsModule,
-    ChatModule,
+    // Cộng đồng chỉ đi qua CommunityModule (chặn, khóa tài khoản, lọc khủng
+    // hoảng, báo cáo); các module posts/groups/friends/chat cũ đã được gỡ.
     StorageModule,
     NotificationsModule,
     EntriesModule,

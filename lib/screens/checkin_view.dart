@@ -126,39 +126,13 @@ class _CheckinViewState extends State<CheckinView> {
       );
     }
 
-    final state = widget.state;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
+    // Chỉ báo trạng thái lưu. Lời mời "Giữ trong vườn" do HomeShell hiện bằng
+    // sheet sau khi đóng check-in (hoặc nút trong Nhật ký), không hỏi hai lần.
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(state.entrySaveMessage(entry.id)),
+        content: Text(widget.state.entrySaveMessage(entry.id)),
         duration: const Duration(seconds: 4),
         persist: false,
-        action: SnackBarAction(
-          label: 'Giữ trong vườn',
-          onPressed: () async {
-            try {
-              await state.plantMoment(entry.id);
-              if (!messenger.mounted) return;
-              messenger.showSnackBar(
-                const SnackBar(
-                  content: Text('Khoảnh khắc đã được giữ lại.'),
-                  duration: Duration(seconds: 2),
-                  persist: false,
-                ),
-              );
-            } catch (_) {
-              if (messenger.mounted) {
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Chưa giữ được khoảnh khắc. Bạn có thể thử lại trong Khu vườn.',
-                    ),
-                  ),
-                );
-              }
-            }
-          },
-        ),
       ),
     );
 
@@ -186,7 +160,7 @@ class _CheckinViewState extends State<CheckinView> {
     // Opened from Garden/Explore/Pause before any pick: don't assume a feeling.
     final awaitingChoice = !state.hasChosenEmotion;
     final toneColor = awaitingChoice ? AppColors.cream : selectedEmotion.tone;
-    final isDarkTone = toneColor.computeLuminance() < 0.42;
+    final isDarkTone = AppColors.prefersLightText(toneColor);
     final contentTextColor = isDarkTone ? Colors.white : AppColors.ink;
     final facePaletteColors =
         AppColors.facePalette[selectedEmotion.face] ??
@@ -277,7 +251,7 @@ class _CheckinViewState extends State<CheckinView> {
                           'CẢM XÚC HIỆN TẠI',
                           style: AppTypography.kicker.copyWith(
                             fontSize: 12,
-                            color: contentTextColor.withValues(alpha: 0.7),
+                            color: contentTextColor.withValues(alpha: 0.85),
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -298,7 +272,7 @@ class _CheckinViewState extends State<CheckinView> {
                               ? 'Chọn cảm xúc gần nhất bên dưới. Không cần chính xác.'
                               : selectedEmotion.promptSubtitle,
                           style: AppTypography.bodySmall.copyWith(
-                            color: contentTextColor.withValues(alpha: 0.8),
+                            color: contentTextColor.withValues(alpha: 0.9),
                             fontSize: 12,
                           ),
                           maxLines: 2,

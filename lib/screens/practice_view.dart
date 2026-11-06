@@ -119,7 +119,7 @@ class _PracticeViewState extends State<PracticeView> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        'MỘT KHOẢNG DỪNG',
+                        'THẢ CẢM XÚC RA',
                         style: AppTypography.kicker.copyWith(
                           color: AppColors.orange,
                           fontWeight: FontWeight.w800,
@@ -131,7 +131,7 @@ class _PracticeViewState extends State<PracticeView> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Vò giấy',
+                  'Vò giấy xả giận',
                   style: AppTypography.titleMedium.copyWith(
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
@@ -235,7 +235,7 @@ class _PracticeViewState extends State<PracticeView> {
               onPressed: widget.onOpenPause,
               icon: const Icon(Icons.play_arrow_rounded, size: 20),
               label: Text(
-                'Bắt đầu dừng lại',
+                'Nghỉ 30 giây',
                 style: AppTypography.button.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,

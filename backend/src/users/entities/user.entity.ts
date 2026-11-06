@@ -4,10 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
 } from 'typeorm';
-import { Post } from '../../posts/entities/post.entity';
-import { Friend } from '../../friends/entities/friend.entity';
 
 @Entity('users')
 export class User {
@@ -59,9 +56,5 @@ export class User {
   updatedAt: Date;
 
   // Relations
-  @OneToMany(() => Post, (post) => post.author, { cascade: true })
-  posts?: Post[];
 
-  @OneToMany(() => Friend, (friend) => friend.user)
-  friends?: Friend[];
 }

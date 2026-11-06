@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mindra/main.dart';
 import 'package:mindra/models/ai_reflection.dart';
@@ -33,6 +34,9 @@ MindraState createTestState() {
 }
 
 void main() {
+  // Không đọc Keychain thật: khôi phục phiên trả về ngay "chưa đăng nhập".
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
   testWidgets('Fresh launch shows onboarding before login', (tester) async {
     final state = MindraState();
     addTearDown(state.dispose);
@@ -48,7 +52,7 @@ void main() {
     expect(find.byType(HomeShell), findsNothing);
   });
 
-  testWidgets('Planted moment confirmation dismisses automatically', (
+  testWidgets('Quick save only reports status, without a second garden prompt', (
     tester,
   ) async {
     final state = MindraState()
@@ -64,11 +68,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lưu check-in nhanh'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Giữ trong vườn'));
-    await tester.pumpAndSettle();
-    expect(state.gardenMoments, hasLength(1));
-    expect(find.text('Khoảnh khắc đã được giữ lại.'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 3));
+    expect(state.entries, hasLength(1));
+    // HomeShell hỏi "Giữ trong vườn" bằng sheet; snackbar không hỏi lại.
+    expect(find.text('Giữ trong vườn'), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     expect(find.byType(SnackBar), findsNothing);
   });
@@ -598,7 +601,7 @@ void main() {
   });
 
   testWidgets(
-    'API login shows email form and registration without unsupported providers',
+    'API login keeps configured Google available during a connection failure',
     (tester) async {
       final state = MindraState();
       addTearDown(state.dispose);
@@ -611,7 +614,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Email'), findsOneWidget);
       expect(find.text('Mật khẩu'), findsOneWidget);
-      expect(find.byKey(const ValueKey('btn-google-sign-in')), findsNothing);
+      expect(find.byKey(const ValueKey('btn-google-sign-in')), findsOneWidget);
+      expect(find.text('Thử kết nối lại'), findsOneWidget);
       await tester.ensureVisible(
         find.byKey(const ValueKey('toggle-auth-mode')),
       );
@@ -620,6 +624,8 @@ void main() {
       // Tiêu đề và nút gửi đều là "Tạo tài khoản".
       expect(find.text('Tạo tài khoản'), findsNWidgets(2));
       expect(find.text('Xác nhận mật khẩu'), findsOneWidget);
+      // Đăng ký hỏi tên hiển thị (không bắt buộc) thay vì tự lấy từ email.
+      expect(find.text('Tên hiển thị (không bắt buộc)'), findsOneWidget);
     },
   );
 

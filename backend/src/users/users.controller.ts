@@ -65,12 +65,6 @@ export class UsersController {
     return this.usersService.updateAvatar(id, body.avatar);
   }
 
-  @Get(':id/stats')
-  @ApiOperation({ summary: 'Thống kê người dùng' })
-  async getStats(@Param('id', ParseUUIDPipe) id: string) {
-    return this.usersService.getStats(id);
-  }
-
   private assertSelf(user: User, id: string) {
     if (user.id !== id) {
       throw new ForbiddenException('Bạn không có quyền sửa hồ sơ này');

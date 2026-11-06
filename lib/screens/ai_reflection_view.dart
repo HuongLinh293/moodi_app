@@ -67,19 +67,8 @@ class _AIReflectionViewState extends State<AIReflectionView>
   @override
   void initState() {
     super.initState();
-    _reflection =
-        widget.state.reflectionForEntry(widget.entry.id) ??
-        AIReflection.forEmotion(
-          emotionKey: widget.entry.emotionKey,
-          intensity: widget.entry.intensity,
-          situation: widget.entry.situation,
-          thought: widget.entry.thought,
-        );
-    if (widget.state.reflectionForEntry(widget.entry.id) == null) {
-      unawaited(_loadServerReflection());
-    } else {
-      widget.state.cacheAIReflection(widget.entry.id, _reflection);
-    }
+    final cached = widget.state.reflectionForEntry(widget.entry.id);
+    _reflection = cached ?? _localReflection();
     _possibleEmotions = List.of(_reflection.possibleEmotions);
     _possibleTrigger = _reflection.possibleTrigger;
     _intensifyingThought = _reflection.intensifyingThought;
@@ -100,19 +89,35 @@ class _AIReflectionViewState extends State<AIReflectionView>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    _startLoading();
+    _isLoading = cached == null;
+    if (cached == null) unawaited(_loadServerReflection());
   }
 
+  // Quá thời gian này thì hiện mẫu có sẵn thay vì bắt người dùng chờ AI.
+  static const _maxWait = Duration(seconds: 20);
+
+  AIReflection _localReflection() => AIReflection.forEmotion(
+    emotionKey: widget.entry.emotionKey,
+    intensity: widget.entry.intensity,
+    situation: widget.entry.situation,
+    thought: widget.entry.thought,
+  );
+
+  // Giữ màn tải tới khi có kết quả, rồi mới hiện nội dung một lần. Kết quả
+  // đến muộn không ghi đè nội dung người dùng đang đọc hoặc đã chỉnh; state
+  // vẫn lưu lại để lần mở sau dùng.
   Future<void> _loadServerReflection() async {
+    AIReflection result;
     try {
-      final generated = await widget.state.fetchOrGenerateAIReflection(
-        widget.entry,
-      );
-      if (!mounted) return;
-      _applyReflection(generated);
+      result = await widget.state
+          .fetchOrGenerateAIReflection(widget.entry)
+          .timeout(_maxWait);
     } catch (_) {
-      if (mounted) widget.state.cacheAIReflection(widget.entry.id, _reflection);
+      result = _localReflection();
     }
+    if (!mounted || !_isLoading) return;
+    _applyReflection(result);
+    setState(() => _isLoading = false);
   }
 
   void _applyReflection(AIReflection reflection) {
@@ -128,23 +133,6 @@ class _AIReflectionViewState extends State<AIReflectionView>
       _microGoalPrompt = reflection.microGoalPrompt;
       _userFeedback = reflection.userFeedback;
       _recommendationsDismissed = reflection.recommendationsDismissed;
-    });
-  }
-
-  void _startLoading() {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
-    final delay = widget.state.lowStimulationMode
-        ? const Duration(milliseconds: 200)
-        : const Duration(milliseconds: 200);
-    Timer(delay, () {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _hasError = false;
-      });
     });
   }
 
@@ -500,7 +488,13 @@ class _AIReflectionViewState extends State<AIReflectionView>
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _startLoading,
+                onPressed: () {
+                  setState(() {
+                    _hasError = false;
+                    _isLoading = true;
+                  });
+                  unawaited(_loadServerReflection());
+                },
                 child: const Text('Thử lại'),
               ),
               TextButton(
@@ -757,11 +751,17 @@ class _AIReflectionViewState extends State<AIReflectionView>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
                 child: Text(
-                  'Gợi ý từ mẫu có sẵn, không phải phân tích AI cá nhân. Chỉ giữ điều phù hợp với bạn.',
-                  style: TextStyle(color: AppColors.textSecondary, height: 1.5),
+                  // Nói đúng nguồn: AI chỉ dùng khi server gọi được Gemini.
+                  _reflection.source == 'ai'
+                      ? 'Gợi ý do AI (Google Gemini) tạo từ những gì bạn viết, không phải chẩn đoán. Chỉ giữ điều phù hợp với bạn.'
+                      : 'Gợi ý từ mẫu có sẵn, không phải phân tích AI cá nhân. Chỉ giữ điều phù hợp với bạn.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
               ),
               // Emotion tags

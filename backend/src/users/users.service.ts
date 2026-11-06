@@ -4,8 +4,6 @@ import { Repository, ILike } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { StorageFile } from '../storage/entities/storage-file.entity';
-import { Post } from '../posts/entities/post.entity';
-import { Friend } from '../friends/entities/friend.entity';
 import { escapeLike, pageParams } from '../common/pagination';
 
 @Injectable()
@@ -15,10 +13,6 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(StorageFile)
     private filesRepository: Repository<StorageFile>,
-    @InjectRepository(Post)
-    private postsRepository: Repository<Post>,
-    @InjectRepository(Friend)
-    private friendsRepository: Repository<Friend>,
   ) {}
 
   async findById(id: string, viewerId?: string): Promise<any> {
@@ -84,28 +78,6 @@ export class UsersService {
     await this.usersRepository.save(user);
 
     return this.toUserResponse(user, true);
-  }
-
-  async getStats(id: string): Promise<any> {
-    const user = await this.usersRepository.findOne({ where: { id } });
-
-    if (!user) {
-      throw new NotFoundException('Người dùng không tồn tại');
-    }
-
-    // Đếm bằng COUNT thay vì nạp toàn bộ bài viết/bạn bè vào bộ nhớ.
-    const [postsCount, friendsCount] = await Promise.all([
-      this.postsRepository.count({ where: { authorId: id } }),
-      this.friendsRepository.count({ where: { userId: id, status: 'accepted' } }),
-    ]);
-
-    return {
-      id: user.id,
-      username: user.username,
-      postsCount,
-      friendsCount,
-      joinedAt: user.createdAt,
-    };
   }
 
   private toUserResponse(user: User, isSelf: boolean): any {

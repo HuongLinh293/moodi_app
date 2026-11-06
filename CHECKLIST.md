@@ -13,7 +13,7 @@ Chú thích: ✅ đã xong · ⬜ chưa làm · ➖ không làm trong đồ án 
 - ✅ An toàn: chặn bài công khai có từ khóa khủng hoảng, giới hạn số yêu cầu, khóa tài khoản, idempotency cho thao tác ghi
 - ✅ Vườn chung 2 người (`shared-gardens`): chỉ có API
 - ✅ Migration tự chạy khi khởi động, script seed tài khoản test
-- ✅ Module users, posts, friends, groups, chat (có WebSocket gateway), storage
+- ✅ Module users, storage; đã gỡ các module posts/friends/groups/chat cũ (Cộng đồng chỉ đi qua `/api/community`)
 - ⬜ Deploy lên server cho buổi demo
 - ⬜ Đặt biến môi trường production: `JWT_*`, `DB_*`, `GOOGLE_CLIENT_IDS` (cả iOS và Web client ID)
 
@@ -27,7 +27,7 @@ Chú thích: ✅ đã xong · ⬜ chưa làm · ➖ không làm trong đồ án 
 - ✅ **Khám phá:** tiến trình tuần, biểu đồ xu hướng 7/30 ngày, 7 bài thực hành, khoảng dừng dùng chung với tab Hôm nay
 - ✅ **Cài đặt:** nhắc check-in hằng ngày (thông báo cục bộ), mục tiêu, giảm kích thích, xuất dữ liệu, đường dây nóng
 - ✅ Hỗ trợ chữ phóng to trên màn hình hẹp, nhãn đọc màn hình (Semantics)
-- ➖ Chat thời gian thực qua WebSocket (hiện tải lại định kỳ qua HTTP)
+- ➖ Tin nhắn thời gian thực (hiện tải lại định kỳ qua HTTP)
 - ➖ Giao diện vườn chung 2 người
 - ➖ Face ID/PIN thật (hiện chỉ có PIN demo `0000` ở bản debug)
 - ➖ Lưu các cài đặt khác ngoài nhắc nhở

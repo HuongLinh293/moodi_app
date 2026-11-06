@@ -1,3 +1,5 @@
+import '../core/crisis_detector.dart';
+
 class AIReflection {
   final List<String> possibleEmotions;
   final String possibleTrigger;
@@ -12,6 +14,10 @@ class AIReflection {
   final String? userFeedback;
   final bool recommendationsDismissed;
 
+  /// Nguồn gợi ý: 'ai' (Gemini), 'template' (mẫu ở server), 'safety', hoặc
+  /// 'local' (mẫu trong app khi không kết nối được server).
+  final String source;
+
   const AIReflection({
     required this.possibleEmotions,
     required this.possibleTrigger,
@@ -25,6 +31,7 @@ class AIReflection {
     this.safetyReason,
     this.userFeedback,
     this.recommendationsDismissed = false,
+    this.source = 'local',
   });
 
   AIReflection copyWith({
@@ -55,6 +62,7 @@ class AIReflection {
       userFeedback: userFeedback ?? this.userFeedback,
       recommendationsDismissed:
           recommendationsDismissed ?? this.recommendationsDismissed,
+      source: source,
     );
   }
 
@@ -65,31 +73,7 @@ class AIReflection {
     String? thought,
   }) {
     // Check safety triggers (S21)
-    final textToCheck = '${situation ?? ''} ${thought ?? ''}'.toLowerCase();
-    final crisisKeywords = [
-      'tự tử',
-      'tự sát',
-      'tự vẫn',
-      'muốn chết',
-      'không muốn sống',
-      'không còn muốn sống',
-      'kết liễu',
-      'tự hại',
-      'tự làm đau',
-      'tổn thương bản thân',
-      'cắt tay',
-      'cắt cổ tay',
-      'uống thuốc quá liều',
-      'chết đi cho rảnh',
-      'suicide',
-      'self harm',
-      'self-harm',
-      'kill myself',
-      'end my life',
-      'end it all',
-    ];
-
-    final isCrisis = crisisKeywords.any((k) => textToCheck.contains(k));
+    final isCrisis = hasCrisisSignal('${situation ?? ''} ${thought ?? ''}');
     if (isCrisis) {
       return const AIReflection(
         possibleEmotions: ['Nguy cấp', 'Cần hỗ trợ'],
@@ -209,6 +193,7 @@ class AIReflection {
       'safetyReason': safetyReason,
       'userFeedback': userFeedback,
       'recommendationsDismissed': recommendationsDismissed,
+      'source': source,
     };
   }
 
@@ -234,6 +219,7 @@ class AIReflection {
       userFeedback: data['userFeedback'] as String?,
       recommendationsDismissed:
           data['recommendationsDismissed'] as bool? ?? false,
+      source: data['source'] as String? ?? 'template',
     );
   }
 

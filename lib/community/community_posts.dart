@@ -810,10 +810,20 @@ class _CommunityPostPageState extends State<CommunityPostPage> {
                               ),
                             ],
                             submit: (v) async {
-                              await widget.repo.mutate('comment', {
-                                ...scope,
-                                ...v,
-                              }, requestId: requestId);
+                              try {
+                                await widget.repo.mutate('comment', {
+                                  ...scope,
+                                  ...v,
+                                }, requestId: requestId);
+                              } on ApiException catch (e) {
+                                // Bình luận công khai có tín hiệu khủng hoảng:
+                                // mời tới nguồn hỗ trợ, form vẫn giữ nội dung.
+                                if (e.code == 'failed-precondition' &&
+                                    context.mounted) {
+                                  showCrisisSupportSheet(context);
+                                }
+                                rethrow;
+                              }
                             },
                           ),
                         );

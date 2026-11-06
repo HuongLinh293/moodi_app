@@ -506,7 +506,7 @@ class _HomeShellState extends State<HomeShell> {
                           Navigator.pop(modalCtx);
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => Scaffold(
+                              builder: (pageCtx) => Scaffold(
                                 backgroundColor: AppColors.paper,
                                 appBar: AppBar(
                                   backgroundColor: AppColors.paper,
@@ -517,7 +517,7 @@ class _HomeShellState extends State<HomeShell> {
                                       Icons.arrow_back_rounded,
                                       color: AppColors.ink,
                                     ),
-                                    onPressed: () => Navigator.pop(context),
+                                    onPressed: () => Navigator.pop(pageCtx),
                                   ),
                                   title: Text(
                                     'Cài đặt & Riêng tư',
@@ -1013,7 +1013,7 @@ class _HomeShellState extends State<HomeShell> {
                 child: Semantics(
                   button: true,
                   selected: isActive,
-                  label: '${item.label}${isActive ? ', selected' : ''}',
+                  label: '${item.label}${isActive ? ', đang chọn' : ''}',
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(

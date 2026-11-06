@@ -91,6 +91,28 @@ class ReflectionRepository {
     }
   }
 
+  /// Phản tư đã lưu trên server, theo id nhật ký (để mở lại sau khi khởi
+  /// động lại app mà không phải tạo lại).
+  Future<Map<String, AIReflection>> getReflectionsByEntry({
+    int limit = 50,
+  }) async {
+    try {
+      final response = await _httpClient.get(
+        '${ApiConfig.reflectionEndpoint}/history',
+        queryParameters: {'limit': '$limit'},
+      );
+      if (response is! List) return {};
+      return {
+        for (final data in response.whereType<Map<String, dynamic>>())
+          if (data['entryId'] is String)
+            data['entryId'] as String: AIReflection.fromJson(data),
+      };
+    } catch (e) {
+      debugPrint('ReflectionRepository: Error fetching reflections: $e');
+      return {};
+    }
+  }
+
   /// Save user feedback on a reflection
   Future<void> saveReflectionFeedback({
     required String reflectionId,

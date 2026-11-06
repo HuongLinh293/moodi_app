@@ -53,4 +53,17 @@ class AppColors {
     'tired': [Color(0xFFDFEAE7), Color(0xFF283A36)],
     'neutral': [Color(0xFFE5E9EE), Color(0xFF363E48)],
   };
+
+  /// Chữ trắng hay chữ đậm (ink) trên nền [background]: chọn bên có độ tương
+  /// phản cao hơn, thay vì một ngưỡng độ sáng cố định (vd. hồng/cam/xám cần
+  /// chữ đậm để đạt WCAG).
+  static bool prefersLightText(Color background) {
+    double contrast(Color a, Color b) {
+      final la = a.computeLuminance();
+      final lb = b.computeLuminance();
+      return la > lb ? (la + 0.05) / (lb + 0.05) : (lb + 0.05) / (la + 0.05);
+    }
+
+    return contrast(Colors.white, background) > contrast(ink, background);
+  }
 }
