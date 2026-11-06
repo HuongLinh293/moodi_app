@@ -1,15 +1,5 @@
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { User } from '../users/entities/user.entity';
-import { Post } from '../posts/entities/post.entity';
-import { PostLike } from '../posts/entities/post-like.entity';
-import { Friend } from '../friends/entities/friend.entity';
-import { FriendRequest } from '../friends/entities/friend-request.entity';
-import { Group } from '../groups/entities/group.entity';
-import { GroupMember } from '../groups/entities/group-member.entity';
-import { GroupInvite } from '../groups/entities/group-invite.entity';
-import { Conversation } from '../chat/entities/conversation.entity';
-import { ConversationParticipant } from '../chat/entities/conversation-participant.entity';
-import { Message } from '../chat/entities/message.entity';
 import { StorageFile } from '../storage/entities/storage-file.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { JournalEntry } from '../entries/entities/journal-entry.entity';
@@ -32,16 +22,6 @@ export const databaseConfig = (): TypeOrmModuleOptions => ({
   database: process.env.DB_NAME || 'moodi_db',
   entities: [
     User,
-    Post,
-    PostLike,
-    Friend,
-    FriendRequest,
-    Group,
-    GroupMember,
-    GroupInvite,
-    Conversation,
-    ConversationParticipant,
-    Message,
     StorageFile,
     Notification,
     JournalEntry,

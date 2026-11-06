@@ -40,39 +40,6 @@ class ApiConfig {
   static String userStats(String id) => '$usersEndpoint/$id/stats';
   static String userAvatar(String id) => '$usersEndpoint/$id/avatar';
 
-  /// Posts endpoints
-  static const String postsEndpoint = '/posts';
-  static String postById(String id) => '$postsEndpoint/$id';
-  static String likePost(String id) => '$postsEndpoint/$id/like';
-
-  /// Friends endpoints
-  static const String friendsEndpoint = '/friends';
-  static const String friendRequestsEndpoint = '$friendsEndpoint/requests';
-  static String acceptFriendRequest(String id) =>
-      '$friendRequestsEndpoint/$id/accept';
-  static String rejectFriendRequest(String id) => '$friendRequestsEndpoint/$id';
-  static String removeFriend(String id) => '$friendsEndpoint/$id';
-  static const String friendSuggestionsEndpoint =
-      '$friendsEndpoint/suggestions';
-
-  /// Groups endpoints
-  static const String groupsEndpoint = '/groups';
-  static String groupById(String id) => '$groupsEndpoint/$id';
-  static String groupMembers(String id) => '$groupsEndpoint/$id/members';
-  static String addGroupMember(String id) => '$groupsEndpoint/$id/members';
-  static String removeGroupMember(String groupId, String userId) =>
-      '$groupsEndpoint/$groupId/members/$userId';
-  static String leaveGroup(String id) => '$groupsEndpoint/$id/leave';
-
-  /// Chat endpoints
-  static const String chatEndpoint = '/chat';
-  static const String conversationsEndpoint = '$chatEndpoint/conversations';
-  static String conversationById(String id) => '$conversationsEndpoint/$id';
-  static String conversationMessages(String id) =>
-      '$conversationsEndpoint/$id/messages';
-  static String sendMessage(String id) => '$conversationsEndpoint/$id/messages';
-
-  /// Storage endpoints
   static const String storageEndpoint = '/storage';
   static const String uploadEndpoint = '$storageEndpoint/upload';
   static String storageFile(String id) => '$storageEndpoint/$id';

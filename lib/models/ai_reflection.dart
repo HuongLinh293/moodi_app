@@ -1,3 +1,5 @@
+import '../core/crisis_detector.dart';
+
 class AIReflection {
   final List<String> possibleEmotions;
   final String possibleTrigger;
@@ -65,31 +67,7 @@ class AIReflection {
     String? thought,
   }) {
     // Check safety triggers (S21)
-    final textToCheck = '${situation ?? ''} ${thought ?? ''}'.toLowerCase();
-    final crisisKeywords = [
-      'tự tử',
-      'tự sát',
-      'tự vẫn',
-      'muốn chết',
-      'không muốn sống',
-      'không còn muốn sống',
-      'kết liễu',
-      'tự hại',
-      'tự làm đau',
-      'tổn thương bản thân',
-      'cắt tay',
-      'cắt cổ tay',
-      'uống thuốc quá liều',
-      'chết đi cho rảnh',
-      'suicide',
-      'self harm',
-      'self-harm',
-      'kill myself',
-      'end my life',
-      'end it all',
-    ];
-
-    final isCrisis = crisisKeywords.any((k) => textToCheck.contains(k));
+    final isCrisis = hasCrisisSignal('${situation ?? ''} ${thought ?? ''}');
     if (isCrisis) {
       return const AIReflection(
         possibleEmotions: ['Nguy cấp', 'Cần hỗ trợ'],

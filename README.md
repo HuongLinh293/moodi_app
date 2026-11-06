@@ -87,7 +87,7 @@ cd backend && npm test    # test backend
 ```
 
 ## Giới hạn đã biết
-- Chat dùng HTTP (tải lại định kỳ). Backend đã có WebSocket gateway nhưng app chưa dùng.
+- Tin nhắn cộng đồng dùng HTTP (tải lại định kỳ), chưa có thời gian thực.
 - Vườn chung 2 người mới có API, chưa có giao diện.
 - Khóa ứng dụng chỉ là bản demo PIN `0000`, chỉ hiện ở bản debug.
 - Phần lớn cài đặt (trừ nhắc nhở) chưa được lưu lại sau khi tắt app.

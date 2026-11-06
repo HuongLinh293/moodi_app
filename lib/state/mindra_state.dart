@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import '../repositories/post_repository.dart';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -76,10 +74,10 @@ class MindraState extends ChangeNotifier {
        _journalRepository = journalRepository ?? JournalRepository(),
        _gardenRepository = gardenRepository ?? GardenRepository(),
        _reflectionRepository = reflectionRepository ?? ReflectionRepository(),
-        _sharedGardenRepository =
-            sharedGardenRepository ?? SharedGardenRepository(),
-        _userRepository = userRepository ?? UserRepository(),
-        _reminderService = reminderService ?? ReminderService() {
+       _sharedGardenRepository =
+           sharedGardenRepository ?? SharedGardenRepository(),
+       _userRepository = userRepository ?? UserRepository(),
+       _reminderService = reminderService ?? ReminderService() {
     if (initialEntries != null && initialEntries.isNotEmpty) {
       _entries.addAll(initialEntries);
       final entry = _entryForDay(DateTime.now());
@@ -114,9 +112,8 @@ class MindraState extends ChangeNotifier {
         _entries.clear();
         _gardenMoments.clear();
         _aiReflections.clear();
-    _reflectionRequests.clear();
+        _reflectionRequests.clear();
         _weeklyReview = null;
-        _posts.clear();
         _microGoals.clear();
         _entrySync.clear();
         _entryWriteVersions.clear();
@@ -178,35 +175,6 @@ class MindraState extends ChangeNotifier {
     _gardenFocusSeq++;
     setTab(1);
     notifyListeners();
-  }
-
-  final _postRepository = PostRepository();
-  List<Post> _posts = [];
-  List<Post> get posts => List.unmodifiable(_posts);
-  Future<void> fetchPosts() async {
-    final revision = _sessionRevision;
-    final page = await _postRepository.getPosts();
-    if (_disposed || revision != _sessionRevision) return;
-    if (page != null) {
-      _posts = page.data;
-      notifyListeners();
-    }
-  }
-
-  Future<void> createPost(String content, List<String>? images) async {
-    final result = await _postRepository.createPost(
-      content: content,
-      imageUrls: images,
-    );
-    if (result == null) throw StateError('Không thể đăng bài.');
-    await fetchPosts();
-  }
-
-  Future<void> likePost(String id) async {
-    if (!await _postRepository.likePost(id)) {
-      throw StateError('Không thể đồng cảm.');
-    }
-    await fetchPosts();
   }
 
   bool _isDemoSharedGarden = false;

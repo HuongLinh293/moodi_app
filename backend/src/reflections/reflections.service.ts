@@ -5,7 +5,7 @@ import {
 } from 'typeorm';
 import { AiReflection } from './entities/ai-reflection.entity';
 import { GenerateReflectionDto, ReflectionFeedbackDto } from './dto/reflection.dto';
-import { CBT_TEMPLATES, CRISIS_KEYWORDS, normalizeExercise } from './cbt-templates';
+import { CBT_TEMPLATES, hasCrisisSignal, normalizeExercise } from './cbt-templates';
 import { JournalEntry } from '../entries/entities/journal-entry.entity';
 import { User } from '../users/entities/user.entity';
 import { pageParams } from '../common/pagination';
@@ -191,8 +191,7 @@ export class ReflectionsService {
   }
 
   private isCrisis(situation: string, thought: string): boolean {
-    const fullText = `${situation} ${thought}`.toLowerCase();
-    return CRISIS_KEYWORDS.some((keyword) => fullText.includes(keyword));
+    return hasCrisisSignal(situation, thought);
   }
 
   private safetyResult(): ReflectionResult {
