@@ -7,6 +7,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+import { JournalEntry } from '../../entries/entities/journal-entry.entity';
 import { User } from '../../users/entities/user.entity';
 
 // Chỉ lưu kết quả phản tư trả cho chính người dùng, không lưu prompt gửi nhà cung cấp AI.
@@ -27,6 +28,10 @@ export class AiReflection {
   // id nhật ký do app sinh. Cùng user + entry chỉ giữ một phản tư.
   @Column({ type: 'varchar', length: 160, nullable: true })
   entryId: string | null;
+
+  @ManyToOne(() => JournalEntry, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn([{ name: 'userId', referencedColumnName: 'userId', foreignKeyConstraintName: 'reflection_entry_owner_fk' }, { name: 'entryId', referencedColumnName: 'id' }])
+  entry: JournalEntry | null;
 
   @Column({ type: 'varchar', length: 40 })
   emotionKey: string;

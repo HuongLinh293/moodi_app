@@ -1,3 +1,5 @@
+import '../core/polling_stream.dart';
+
 import 'package:flutter/foundation.dart';
 
 import '../core/http_client.dart';
@@ -104,16 +106,7 @@ class GardenRepository {
   /// Note: REST APIs don't support real-time streaming like Firestore.
   /// This implementation returns a stream using periodic polling.
   Stream<List<GardenMoment>> watchMoments({String? userId}) {
-    const pollInterval = Duration(seconds: 5);
-
-    return Stream.periodic(pollInterval, (_) async {
-      try {
-        return await fetchMoments(userId: userId);
-      } catch (e) {
-        debugPrint('GardenRepository: Error watching moments: $e');
-        rethrow;
-      }
-    }).asyncExpand((future) => future.asStream());
+    return pollingStream(() => fetchMoments(userId: userId));
   }
 
   /// Fetch a single moment by ID

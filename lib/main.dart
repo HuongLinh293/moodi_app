@@ -35,13 +35,40 @@ class MindraApp extends StatefulWidget {
   State<MindraApp> createState() => _MindraAppState();
 }
 
-class _MindraAppState extends State<MindraApp> {
-  bool _unlockedThisSession = false;
+class _MindraAppState extends State<MindraApp> with WidgetsBindingObserver {
+  MindraState? _lifecycleState;
+  bool _privacyCover = false;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle != AppLifecycleState.resumed &&
+        _lifecycleState?.appLockEnabled == true)
+      FocusManager.instance.primaryFocus?.unfocus();
+    if (lifecycle == AppLifecycleState.paused ||
+        lifecycle == AppLifecycleState.detached) {
+      _lifecycleState?.lockApplication();
+    }
+    if (mounted) {
+      setState(() => _privacyCover = lifecycle != AppLifecycleState.resumed);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final appContent = Consumer<MindraState>(
       builder: (context, state, _) {
+        _lifecycleState = state;
         Widget home;
         if (state.startingUp && !state.isAuthenticated) {
           // Đang đọc cài đặt / khôi phục phiên: chờ thay vì chớp onboarding.
@@ -51,11 +78,6 @@ class _MindraAppState extends State<MindraApp> {
         } else if (!state.isAuthenticated) {
           // Onboarding xong nhưng chưa đăng nhập (sau logout hoặc fresh install)
           home = const LoginView();
-        } else if (state.appLockEnabled && !_unlockedThisSession) {
-          home = AppLockView(
-            state: state,
-            onUnlocked: () => setState(() => _unlockedThisSession = true),
-          );
         } else {
           home = const HomeShell();
         }
@@ -67,6 +89,30 @@ class _MindraAppState extends State<MindraApp> {
           title: 'Moodi',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
+          builder: (context, child) {
+            final locked =
+                state.isAuthenticated &&
+                state.appLockEnabled &&
+                !state.appUnlocked;
+            final hidden = locked || (_privacyCover && state.appLockEnabled);
+            return Stack(
+              children: [
+                ExcludeSemantics(
+                  excluding: hidden,
+                  child: ExcludeFocus(
+                    excluding: hidden,
+                    child: IgnorePointer(ignoring: hidden, child: child!),
+                  ),
+                ),
+                if (hidden)
+                  Positioned.fill(
+                    child: locked
+                        ? AppLockView(state: state)
+                        : const _StartupSplash(),
+                  ),
+              ],
+            );
+          },
           home: home,
         );
       },

@@ -486,7 +486,7 @@ class _MomentBloomButtonState extends State<_MomentBloomButton>
   late Animation<double> _bounceAnimation;
 
   bool get _canAnimateSway {
-    if (widget.reducedMotion) return false;
+    if (MindraMotion.of(widget.reducedMotion).reduced) return false;
     if (kIsWeb) return true;
     try {
       if (Platform.environment.containsKey('FLUTTER_TEST')) return false;
@@ -497,15 +497,7 @@ class _MomentBloomButtonState extends State<_MomentBloomButton>
   @override
   void initState() {
     super.initState();
-    if (_canAnimateSway) {
-      final durationMs = 2800 + (widget.moment.slotIndex % 5) * 260;
-      _swayController = AnimationController(
-        vsync: this,
-        duration: Duration(milliseconds: durationMs),
-      );
-      _swayController!.value = ((widget.moment.slotIndex * 0.23) % 1.0);
-      _swayController!.repeat(reverse: true);
-    }
+    _syncSway();
 
     _bounceController = AnimationController(
       vsync: this,
@@ -536,6 +528,34 @@ class _MomentBloomButtonState extends State<_MomentBloomButton>
     ]).animate(_bounceController!);
   }
 
+  void _syncSway() {
+    if (!_canAnimateSway) {
+      _swayController?.stop();
+      return;
+    }
+    if (_swayController == null) {
+      final durationMs = 2800 + (widget.moment.slotIndex % 5) * 260;
+      _swayController = AnimationController(
+        vsync: this,
+        duration: Duration(milliseconds: durationMs),
+      );
+      _swayController!.value = ((widget.moment.slotIndex * 0.23) % 1.0);
+    }
+    if (!_swayController!.isAnimating) _swayController!.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MomentBloomButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncSway();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncSway();
+  }
+
   @override
   void dispose() {
     _swayController?.dispose();
@@ -544,7 +564,8 @@ class _MomentBloomButtonState extends State<_MomentBloomButton>
   }
 
   void _onPressed() {
-    _bounceController?.forward(from: 0.0);
+    if (!MindraMotion.of(widget.reducedMotion).reduced)
+      _bounceController?.forward(from: 0.0);
     widget.onTap();
   }
 
@@ -588,7 +609,7 @@ class _MomentBloomButtonState extends State<_MomentBloomButton>
 
     Widget content = bloomWidget;
 
-    if (_canAnimateSway) {
+    if (!MediaQuery.disableAnimationsOf(context) && _canAnimateSway) {
       final maxAngle = 0.05 + ((widget.moment.slotIndex % 3) * 0.015);
       content = AnimatedBuilder(
         animation: Listenable.merge([_swayController!, _bounceAnimation]),

@@ -32,7 +32,7 @@ void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   group('completeExercise', () {
-    test('keeps the written thought and syncs the update', () async {
+    test('keeps journal content and records practice separately', () async {
       final journal = RecordingJournal();
       final state = MindraState(
         initialEntries: [todayEntry()],
@@ -49,9 +49,11 @@ void main() {
 
       final entry = state.entryById('e1')!;
       expect(entry.thought, 'Mình sẽ trượt mất');
-      expect(entry.response, 'Lướt điện thoại\nThấy nhẹ hơn');
-      expect(entry.exerciseDone, isTrue);
-      expect(journal.saved.single.id, 'e1');
+      expect(entry.response, 'Lướt điện thoại');
+      expect(entry.exerciseDone, isFalse);
+      expect(journal.saved, isEmpty);
+      expect(state.practiceRecords.single.note, 'Thấy nhẹ hơn');
+      expect(state.practiceRecords.single.sourceEntryId, 'e1');
     });
 
     test('does not invent a check-in when no emotion was chosen', () {
@@ -69,7 +71,9 @@ void main() {
       );
       addTearDown(state.dispose);
 
-      expect(state.completeExercise(exerciseId: 'grounding'), isFalse);
+      expect(state.completeExercise(exerciseId: 'grounding'), isTrue);
+      expect(state.practiceRecords.single.beforeEmotionKey, isNull);
+      expect(state.practiceRecords.single.afterEmotionKey, isNull);
       expect(state.entries, hasLength(1));
     });
 
@@ -96,8 +100,9 @@ void main() {
         ),
         isTrue,
       );
-      expect(state.entries.first.emotionKey, 'calm');
-      expect(state.entries.first.intensity, 2);
+      expect(state.entries.single.emotionKey, 'sad');
+      expect(state.practiceRecords.single.afterEmotionKey, 'calm');
+      expect(state.practiceRecords.single.afterIntensity, 2);
     });
   });
 

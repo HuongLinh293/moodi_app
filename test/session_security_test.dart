@@ -114,7 +114,7 @@ void main() {
   late SessionGarden garden;
   late SessionReflection reflections;
   late MindraState state;
-  setUp(() {
+  setUp(() async {
     auth = SessionAuth();
     journal = SessionJournal();
     garden = SessionGarden();
@@ -125,7 +125,9 @@ void main() {
       gardenRepository: garden,
       sharedGardenRepository: SessionShared(),
       reflectionRepository: reflections,
-    );
+    )..setAiConsent(true);
+    await Future<void>.delayed(Duration.zero);
+    journal.streams['alice']?.add([]);
   });
   tearDown(() async {
     state.dispose();
@@ -217,7 +219,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Sensitive detail route'), findsOneWidget);
-    await state.logout();
+    await tester.runAsync(state.logout);
     await tester.pumpAndSettle();
     expect(find.text('Sensitive detail route'), findsNothing);
     expect(find.byType(LoginView), findsOneWidget);

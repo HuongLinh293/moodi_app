@@ -12,6 +12,7 @@ import { EntriesModule } from './entries/entries.module';
 import { MomentsModule } from './moments/moments.module';
 import { SharedGardensModule } from './shared-gardens/shared-gardens.module';
 import { ReflectionsModule } from './reflections/reflections.module';
+import { PracticeModule } from './practice/practice.module';
 import { CommunityModule } from './community/community.module';
 import { databaseConfig } from './config/database.config';
 
@@ -37,6 +38,7 @@ import { databaseConfig } from './config/database.config';
     SharedGardensModule,
     ReflectionsModule,
     CommunityModule,
+    PracticeModule,
   ],
   controllers: [],
   providers: [{ provide: APP_GUARD, useClass: HttpThrottlerGuard }],

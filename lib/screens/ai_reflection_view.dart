@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/colors.dart';
+import '../core/theme/motion.dart';
 import '../core/theme/shadows.dart';
 import '../core/theme/typography.dart';
 import '../models/ai_reflection.dart';
@@ -83,14 +84,19 @@ class _AIReflectionViewState extends State<AIReflectionView>
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    );
 
     _pulseAnimation = Tween<double>(begin: 0.92, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
     _isLoading = cached == null;
-    if (cached == null) unawaited(_loadServerReflection());
+    if (cached == null && widget.state.aiConsent) {
+      if (!MindraMotion.of(widget.state.lowStimulationMode).reduced) {
+        _pulseController.repeat(reverse: true);
+      }
+      unawaited(_loadServerReflection());
+    }
   }
 
   // Quá thời gian này thì hiện mẫu có sẵn thay vì bắt người dùng chờ AI.
@@ -116,6 +122,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
       result = _localReflection();
     }
     if (!mounted || !_isLoading) return;
+    _pulseController.stop();
     _applyReflection(result);
     setState(() => _isLoading = false);
   }
@@ -143,18 +150,23 @@ class _AIReflectionViewState extends State<AIReflectionView>
   }
 
   void _launchExercise(String exerciseId) {
-    HapticFeedback.mediumImpact();
+    MindraMotion.of(widget.state.lowStimulationMode).medium();
     final config = _getExerciseConfig(exerciseId);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => PracticeSessionSheet(state: widget.state, config: config),
+      builder: (_) => PracticeSessionSheet(
+        state: widget.state,
+        config: config,
+        sourceEntry: widget.entry,
+      ),
     );
   }
 
   void _selectReframingLens(ReframingLensType type) {
-    HapticFeedback.selectionClick();
+    MindraMotion.of(widget.state.lowStimulationMode).selection();
     setState(() {
       if (_selectedLens == type) {
         _selectedLens = null;
@@ -174,8 +186,9 @@ class _AIReflectionViewState extends State<AIReflectionView>
     final edits = await showModalBottomSheet<_ReflectionEdits>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ReflectionEditSheet(reflection: _reflection),
+      builder: (_) => _ReflectionEditSheet(reflection: _currentReflection),
     );
     if (edits == null || !mounted) return;
 
@@ -194,6 +207,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
     widget.state.updateAIReflection(widget.entry.id, updatedReflection);
 
     setState(() {
+      _reflection = updatedReflection;
       _possibleEmotions = edits.possibleEmotions;
       _possibleTrigger = edits.possibleTrigger;
       _intensifyingThought = edits.intensifyingThought;
@@ -315,8 +329,16 @@ class _AIReflectionViewState extends State<AIReflectionView>
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (!widget.state.aiConsent) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.state,
+    builder: (context, _) => _buildContent(context),
+  );
+
+  Widget _buildContent(BuildContext context) {
+    if (widget.state.reflectionForEntry(widget.entry.id)?.safetyFlag == true)
+      return _buildS21SafetyCrisis();
+    if (!widget.state.aiConsent &&
+        widget.state.reflectionForEntry(widget.entry.id) == null) {
       return _buildDisabledState();
     }
 
@@ -415,6 +437,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Đóng gợi ý phản tư',
           icon: const Icon(Icons.close, color: AppColors.ink),
           onPressed: () => Navigator.pop(context),
         ),
@@ -462,6 +485,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Đóng gợi ý phản tư',
           icon: const Icon(Icons.close, color: AppColors.ink),
           onPressed: () => Navigator.pop(context),
         ),
@@ -516,6 +540,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Đóng gợi ý phản tư',
           icon: const Icon(Icons.close, color: AppColors.ink),
           onPressed: () => Navigator.pop(context),
         ),
@@ -559,7 +584,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
                         ),
                         child: const Icon(
                           Icons.favorite,
-                          color: AppColors.orange,
+                          color: AppColors.orangeText,
                           size: 24,
                         ),
                       ),
@@ -692,7 +717,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
                 Text(
                   phone,
                   style: AppTypography.titleMedium.copyWith(
-                    color: AppColors.orange,
+                    color: AppColors.orangeText,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -712,7 +737,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
             icon: const Icon(Icons.phone),
             style: IconButton.styleFrom(
               backgroundColor: AppColors.orange.withValues(alpha: 0.15),
-              foregroundColor: AppColors.orange,
+              foregroundColor: AppColors.orangeText,
             ),
           ),
         ],
@@ -728,6 +753,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Đóng gợi ý phản tư',
           icon: const Icon(Icons.close, color: AppColors.ink),
           onPressed: () => Navigator.pop(context),
         ),
@@ -855,7 +881,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
                               'Suy nghĩ có thể đang phóng đại',
                               style: AppTypography.caption.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.orange,
+                                color: AppColors.orangeText,
                               ),
                             ),
                           ],
@@ -890,11 +916,13 @@ class _AIReflectionViewState extends State<AIReflectionView>
                       children: [
                         const Text('🌿', style: TextStyle(fontSize: 16)),
                         const SizedBox(width: 8),
-                        Text(
-                          'Góc nhìn cân bằng hơn',
-                          style: AppTypography.caption.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1E634F),
+                        Expanded(
+                          child: Text(
+                            'Góc nhìn cân bằng hơn',
+                            style: AppTypography.caption.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1E634F),
+                            ),
                           ),
                         ),
                       ],
@@ -1108,7 +1136,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
                                 Text(
                                   'Bước tiếp theo đề xuất',
                                   style: AppTypography.caption.copyWith(
-                                    color: AppColors.orange,
+                                    color: AppColors.orangeText,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -1214,7 +1242,8 @@ class _AIReflectionViewState extends State<AIReflectionView>
                       else
                         OutlinedButton.icon(
                           onPressed: () {
-                            HapticFeedback.lightImpact();
+                            MindraMotion.of(widget.state.lowStimulationMode)
+                                .light();
                             widget.state.addMicroGoal(_microGoalPrompt);
                             setState(() => _microGoalSaved = true);
                           },
@@ -1265,7 +1294,7 @@ class _AIReflectionViewState extends State<AIReflectionView>
     final isSelected = _userFeedback == key;
     return InkWell(
       onTap: () async {
-        HapticFeedback.selectionClick();
+        MindraMotion.of(widget.state.lowStimulationMode).selection();
         if (key == 'needs_edit') {
           await _openReflectionEditor();
         } else {
@@ -1275,7 +1304,9 @@ class _AIReflectionViewState extends State<AIReflectionView>
       },
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        constraints: const BoxConstraints(minHeight: 48),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.ink : AppColors.cream,
           borderRadius: BorderRadius.circular(14),
@@ -1465,109 +1496,109 @@ class _ReflectionEditSheetState extends State<_ReflectionEditSheet> {
           child: GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 42,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Chỉnh sửa phản tư',
-                        style: AppTypography.titleMedium.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Đóng',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Text(
-                      'Bạn có thể sửa hoặc xóa từng mục cho đúng với trải nghiệm của mình.',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _textField(
-                      'Cảm xúc có thể liên quan, cách nhau bằng dấu phẩy',
-                      _emotionsController,
-                    ),
-                    const SizedBox(height: 14),
-                    _textField('Tác nhân', _triggerController, maxLines: 2),
-                    const SizedBox(height: 14),
-                    _textField(
-                      'Suy nghĩ có thể đang làm cảm xúc mạnh hơn',
-                      _thoughtController,
-                    ),
-                    const SizedBox(height: 14),
-                    _textField('Góc nhìn cân bằng', _balancedController),
-                    const SizedBox(height: 14),
-                    _textField('Câu hỏi suy ngẫm', _questionController),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: _recommendedExercise,
-                      decoration: const InputDecoration(
-                        labelText: 'Bài tập đề xuất',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _exerciseLabels.entries
-                          .map(
-                            (entry) => DropdownMenuItem<String>(
-                              value: entry.key,
-                              child: Text(entry.value),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _recommendedExercise = value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    _textField('Lý do đề xuất', _reasonController),
-                    const SizedBox(height: 14),
-                    _textField('Mục tiêu nhỏ', _microGoalController),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.ink,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Lưu chỉnh sửa'),
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-              ),
-            ],
-          ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Chỉnh sửa phản tư',
+                          style: AppTypography.titleMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Đóng',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      Text(
+                        'Bạn có thể sửa hoặc xóa từng mục cho đúng với trải nghiệm của mình.',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _textField(
+                        'Cảm xúc có thể liên quan, cách nhau bằng dấu phẩy',
+                        _emotionsController,
+                      ),
+                      const SizedBox(height: 14),
+                      _textField('Tác nhân', _triggerController, maxLines: 2),
+                      const SizedBox(height: 14),
+                      _textField(
+                        'Suy nghĩ có thể đang làm cảm xúc mạnh hơn',
+                        _thoughtController,
+                      ),
+                      const SizedBox(height: 14),
+                      _textField('Góc nhìn cân bằng', _balancedController),
+                      const SizedBox(height: 14),
+                      _textField('Câu hỏi suy ngẫm', _questionController),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<String>(
+                        initialValue: _recommendedExercise,
+                        decoration: const InputDecoration(
+                          labelText: 'Bài tập đề xuất',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _exerciseLabels.entries
+                            .map(
+                              (entry) => DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _recommendedExercise = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      _textField('Lý do đề xuất', _reasonController),
+                      const SizedBox(height: 14),
+                      _textField('Mục tiêu nhỏ', _microGoalController),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.ink,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Lưu chỉnh sửa'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

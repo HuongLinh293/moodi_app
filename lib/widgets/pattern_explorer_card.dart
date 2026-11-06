@@ -41,6 +41,15 @@ class _PatternExplorerCardState extends State<PatternExplorerCard> {
   PatternTimeRange _selectedRange = PatternTimeRange.thirtyDays;
   PatternDimension _selectedDimension = PatternDimension.triggers;
 
+  bool _inRange(DateTime time) {
+    if (_selectedRange == PatternTimeRange.all) return true;
+    final cutoffDays = _selectedRange == PatternTimeRange.sevenDays ? 7 : 30;
+    return time.isAfter(DateTime.now().subtract(Duration(days: cutoffDays)));
+  }
+
+  int? _intensityOf(List<JournalEntry> entries, String? id) =>
+      entries.where((e) => e.id == id).firstOrNull?.intensity;
+
   List<JournalEntry> _getFilteredEntries() {
     final allEntries = widget.state.entries;
     if (_selectedRange == PatternTimeRange.all) return allEntries;
@@ -610,14 +619,33 @@ class _PatternExplorerCardState extends State<PatternExplorerCard> {
   }
 
   Widget _buildPracticesDimension(List<JournalEntry> entries) {
+    // Bài tập cũ nằm trên check-in; bài mới là PracticeRecord riêng.
     final exercises = entries.where((e) => e.exerciseDone).toList();
-    final withFeedback = exercises
-        .where((e) => e.afterIntensity != null)
+    final shownIds = entries.map((e) => e.id).toSet();
+    final records = widget.state.practiceRecords
+        .where(
+          (r) => r.sourceEntryId == null
+              ? _inRange(r.timestamp)
+              : shownIds.contains(r.sourceEntryId),
+        )
         .toList();
+    // Cặp (trước, sau) cho mỗi lần có phản hồi.
+    final withFeedback = <(int, int)>[
+      for (final e in exercises)
+        if (e.afterIntensity != null) (e.intensity, e.afterIntensity!),
+      for (final r in records)
+        if (r.afterIntensity != null &&
+            (r.beforeIntensity ?? _intensityOf(entries, r.sourceEntryId)) !=
+                null)
+          (
+            r.beforeIntensity ?? _intensityOf(entries, r.sourceEntryId)!,
+            r.afterIntensity!,
+          ),
+    ];
 
     int improvedCount = 0;
-    for (final e in withFeedback) {
-      if (e.afterIntensity! < e.intensity) {
+    for (final (before, after) in withFeedback) {
+      if (after < before) {
         improvedCount++;
       }
     }
@@ -656,7 +684,7 @@ class _PatternExplorerCardState extends State<PatternExplorerCard> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${exercises.length}',
+                      '${exercises.length + records.length}',
                       style: AppTypography.titleMedium.copyWith(
                         fontWeight: FontWeight.w800,
                       ),

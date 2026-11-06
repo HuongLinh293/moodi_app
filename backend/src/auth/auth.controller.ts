@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { PasswordResetService, ForgotPasswordDto, ResetPasswordDto } from './password-reset.service';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -17,7 +18,17 @@ const AUTH_LIMIT = { default: { limit: 10, ttl: 60_000 } };
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService, private passwordReset: PasswordResetService) {}
+
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  forgot(@Body() dto: ForgotPasswordDto) { return this.passwordReset.request(dto); }
+
+  @Post('reset-password')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  reset(@Body() dto: ResetPasswordDto) { return this.passwordReset.reset(dto); }
 
   @Post('register')
   @Throttle(AUTH_LIMIT)

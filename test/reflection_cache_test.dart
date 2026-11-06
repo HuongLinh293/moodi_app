@@ -20,6 +20,17 @@ class OfflineJournal extends JournalRepository {
 class CountingReflection extends ReflectionRepository {
   final calls = <String?>[];
   final pending = <Completer<AIReflection>>[];
+  final feedback = <String>[];
+
+  @override
+  Future<void> saveReflectionFeedback({
+    required String reflectionId,
+    required String feedback,
+    required bool helpful,
+    Map<String, dynamic>? edits,
+  }) async {
+    this.feedback.add(reflectionId);
+  }
 
   @override
   Future<AIReflection> generateReflection({
@@ -56,7 +67,7 @@ void main() {
     authRepository: GardenTestAuth(),
     journalRepository: OfflineJournal(),
     reflectionRepository: reflections,
-  );
+  )..setAiConsent(true);
 
   test('opening the reflection twice sends a single request', () async {
     final reflections = CountingReflection();
@@ -86,8 +97,12 @@ void main() {
     state.updateEntry(edited);
     expect(state.reflectionForEntry('e1'), isNull);
 
-    unawaited(state.fetchOrGenerateAIReflection(edited));
+    final regenerated = state.fetchOrGenerateAIReflection(edited);
+    await state.flushLocalData();
+    await Future<void>.delayed(Duration.zero);
     expect(reflections.calls, ['Bị điểm kém', 'Mình muốn chết']);
+    reflections.pending.last.complete(reflectionFor(edited.situation));
+    await regenerated;
   });
 
   test('a request for old content cannot overwrite the edited entry', () async {
@@ -115,4 +130,42 @@ void main() {
     state.updateEntry(sadEntry().copyWith(exerciseDone: true));
     expect(state.reflectionForEntry('e1'), isNotNull);
   });
+
+  test('AI is opt-in at the request boundary', () async {
+    final reflections = CountingReflection();
+    final state = buildState(reflections)..setAiConsent(false);
+    addTearDown(state.dispose);
+    await expectLater(
+      state.fetchOrGenerateAIReflection(sadEntry()),
+      throwsStateError,
+    );
+    expect(reflections.calls, isEmpty);
+  });
+
+  test(
+    'a late generated result preserves edits and attaches its server id',
+    () async {
+      final reflections = CountingReflection();
+      final state = buildState(reflections);
+      addTearDown(state.dispose);
+      final request = state.fetchOrGenerateAIReflection(sadEntry());
+      state.updateAIReflection(
+        'e1',
+        reflectionFor('local').copyWith(
+          balancedThought: 'Lời tôi đã sửa',
+          userFeedback: 'needs_edit',
+        ),
+      );
+      reflections.pending.single.complete(
+        AIReflection.fromJson({
+          ...reflectionFor('server').toJson(),
+          'id': 'server-reflection',
+        }),
+      );
+      final result = await request;
+      expect(result.balancedThought, 'Lời tôi đã sửa');
+      expect(state.reflectionForEntry('e1')!.id, 'server-reflection');
+      expect(reflections.feedback, ['server-reflection']);
+    },
+  );
 }

@@ -1,167 +1,78 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme/colors.dart';
-import '../core/theme/motion.dart';
-import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
+import '../core/theme/colors.dart';
 
 class AppLockView extends StatefulWidget {
+  const AppLockView({super.key, required this.state});
   final MindraState state;
-  final VoidCallback onUnlocked;
-
-  const AppLockView({super.key, required this.state, required this.onUnlocked});
-
   @override
   State<AppLockView> createState() => _AppLockViewState();
 }
 
 class _AppLockViewState extends State<AppLockView> {
-  String _pin = '';
+  bool _busy = false;
   String? _error;
-
-  static const _demoPin = '0000';
-
-  void _appendDigit(String digit) {
-    if (_pin.length >= 4) return;
-    MindraMotion.of(widget.state.lowStimulationMode).selection();
+  Future<void> _unlock() async {
+    if (_busy) return;
     setState(() {
-      _pin += digit;
+      _busy = true;
       _error = null;
     });
-    if (_pin.length == 4) {
-      _verify();
+    final unlocked = await widget.state.unlockApplication();
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        if (!unlocked) _error = 'Chưa xác thực được. Hãy thử lại bằng sinh trắc học hoặc mã khóa của thiết bị.';
+      });
     }
-  }
-
-  void _deleteDigit() {
-    if (_pin.isEmpty) return;
-    MindraMotion.of(widget.state.lowStimulationMode).light();
-    setState(() {
-      _pin = _pin.substring(0, _pin.length - 1);
-      _error = null;
-    });
-  }
-
-  void _verify() {
-    if (_pin == _demoPin) {
-      widget.onUnlocked();
-      return;
-    }
-    MindraMotion.of(widget.state.lowStimulationMode).medium();
-    setState(() {
-      _error = 'Mã chưa đúng. Thử 0000 cho bản demo.';
-      _pin = '';
-    });
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.paper,
+    body: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(28),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Spacer(),
-              const Icon(
-                Icons.lock_outline_rounded,
-                size: 36,
-                color: AppColors.ink,
-              ),
-              const SizedBox(height: 16),
+              const Icon(Icons.lock_outline, size: 48),
+              const SizedBox(height: 24),
               Text(
-                'Không gian của bạn đang được giữ kín',
+                'Không gian riêng của bạn',
+                style: Theme.of(context).textTheme.headlineSmall,
                 textAlign: TextAlign.center,
-                style: AppTypography.headlineMedium.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Đây là bản thử nghiệm. Nhập PIN demo 0000 để tiếp tục.',
+              const SizedBox(height: 12),
+              const Text(
+                'Dùng Face ID, vân tay hoặc mã khóa thiết bị để tiếp tục.',
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium,
               ),
-              const SizedBox(height: 28),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(4, (index) {
-                  final filled = index < _pin.length;
-                  return Container(
-                    width: 14,
-                    height: 14,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: filled ? AppColors.ink : Colors.transparent,
-                      border: Border.all(color: AppColors.ink, width: 1.4),
-                    ),
-                  );
-                }),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 14),
-                Text(
-                  _error!,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.orange,
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(_error!, textAlign: TextAlign.center),
                   ),
                 ),
-              ],
-              const Spacer(),
-              _buildPad(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: _busy ? null : _unlock,
+                icon: const Icon(Icons.fingerprint),
+                label: Text(_busy ? 'Đang xác thực…' : 'Mở khóa Moodi'),
+              ),
+              const SizedBox(height: 12),
               TextButton(
-                onPressed: widget.onUnlocked,
-                child: const Text('Bỏ qua lần này'),
+                onPressed: _busy ? null : widget.state.signOutFromLock,
+                child: const Text('Không mở được? Đăng xuất và tắt khóa'),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildPad() {
-    const keys = [
-      ['1', '2', '3'],
-      ['4', '5', '6'],
-      ['7', '8', '9'],
-      ['', '0', 'del'],
-    ];
-
-    return Column(
-      children: keys.map((row) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: row.map((key) {
-            if (key.isEmpty) {
-              return const SizedBox(width: 72, height: 72);
-            }
-            return SizedBox(
-              width: 72,
-              height: 72,
-              child: TextButton(
-                onPressed: () =>
-                    key == 'del' ? _deleteDigit() : _appendDigit(key),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.ink,
-                  shape: const CircleBorder(),
-                ),
-                child: key == 'del'
-                    ? const Icon(Icons.backspace_outlined)
-                    : Text(
-                        key,
-                        style: AppTypography.headlineMedium.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-              ),
-            );
-          }).toList(),
-        );
-      }).toList(),
-    );
-  }
+    ),
+  );
 }

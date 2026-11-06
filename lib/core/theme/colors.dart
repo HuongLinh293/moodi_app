@@ -8,6 +8,7 @@ class AppColors {
   static const Color creamDark = Color(0xFFF2ECE1);
   static const Color yellow = Color(0xFFFFC629);
   static const Color orange = Color(0xFFFF5A1F);
+  static const Color orangeText = Color(0xFFB83C0B);
   static const Color blue = Color(0xFF2366E8);
   static const Color mint = Color(0xFF31CF99);
   static const Color pink = Color(0xFFE56A9D);
@@ -25,7 +26,7 @@ class AppColors {
   static const Color textSecondary = Color(0xFF6E6C63);
   // Kept dark enough to remain legible on the paper surface at small sizes.
   static const Color textMuted = Color(0xFF706E64);
-  static const Color textTertiary = Color(0xFF858278);
+  static const Color textTertiary = Color(0xFF706E64);
 
   // Emotion Background & Foreground
   static const Map<String, Color> emotionTones = {

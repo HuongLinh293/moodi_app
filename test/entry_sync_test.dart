@@ -44,12 +44,16 @@ void main() {
       );
       addTearDown(state.dispose);
       state.addEntry(entry('new'));
+      await state.flushLocalData();
+      await Future<void>.delayed(Duration.zero);
       expect(state.entrySyncStatus('new'), EntrySyncStatus.pending);
       repo.writes[0].completeError(StateError('offline'));
       await Future<void>.delayed(Duration.zero);
       expect(state.entrySyncStatus('new'), EntrySyncStatus.failed);
       expect(state.entryById('new'), isNotNull);
       state.retryEntrySync();
+      await state.flushLocalData();
+      await Future<void>.delayed(Duration.zero);
       expect(state.entrySyncStatus('new'), EntrySyncStatus.pending);
       repo.writes[1].complete();
       await Future<void>.delayed(Duration.zero);
@@ -59,23 +63,30 @@ void main() {
     },
   );
 
-  test('Old acknowledgement cannot overwrite newer failed edit', () async {
-    final repo = ControlledJournal();
-    final state = MindraState(
-      initialEntries: [entry('seed')],
-      authRepository: GardenTestAuth(),
-      journalRepository: repo,
-    );
-    addTearDown(state.dispose);
-    state.addEntry(entry('new'));
-    state.updateEntry(entry('new').copyWith(thought: 'new draft'));
-    repo.writes[1].completeError(StateError('denied'));
-    await Future<void>.delayed(Duration.zero);
-    repo.writes[0].complete();
-    await Future<void>.delayed(Duration.zero);
-    expect(state.entrySyncStatus('new'), EntrySyncStatus.failed);
-    expect(state.entryById('new')!.thought, 'new draft');
-  });
+  test(
+    'Writes to the same entry are ordered and keep the newest failed edit',
+    () async {
+      final repo = ControlledJournal();
+      final state = MindraState(
+        initialEntries: [entry('seed')],
+        authRepository: GardenTestAuth(),
+        journalRepository: repo,
+      );
+      addTearDown(state.dispose);
+      state.addEntry(entry('new'));
+      state.updateEntry(entry('new').copyWith(thought: 'new draft'));
+      await state.flushLocalData();
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.writes, hasLength(1));
+      repo.writes[0].complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(repo.writes, hasLength(2));
+      repo.writes[1].completeError(StateError('denied'));
+      await Future<void>.delayed(Duration.zero);
+      expect(state.entrySyncStatus('new'), EntrySyncStatus.failed);
+      expect(state.entryById('new')!.thought, 'new draft');
+    },
+  );
 
   test('Failed refresh does not erase existing or unsynced entries', () async {
     final repo = ControlledJournal();
@@ -86,6 +97,8 @@ void main() {
     );
     addTearDown(state.dispose);
     state.addEntry(entry('new'));
+    await state.flushLocalData();
+    await Future<void>.delayed(Duration.zero);
     await state.syncFromApi();
     expect(state.entryById('seed'), isNotNull);
     expect(state.entryById('new'), isNotNull);

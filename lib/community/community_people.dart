@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/colors.dart';
+import '../core/http_client.dart';
 import '../core/theme/typography.dart';
 import 'community_repository.dart';
 import 'community_widgets.dart';
@@ -421,7 +422,7 @@ class _ConversationCard extends StatelessWidget {
                     width: 10,
                     height: 10,
                     decoration: const BoxDecoration(
-                      color: AppColors.orange,
+                      color: AppColors.orangeText,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -695,7 +696,14 @@ class _CommunityChatPageState extends State<CommunityChatPage>
     } catch (e) {
       if (mounted) {
         setState(() {
-          items = [];
+          if (e is ApiException &&
+              [
+                'permission-denied',
+                'unauthenticated',
+                'not-found',
+              ].contains(e.code)) {
+            items = [];
+          }
           error = CommunityRepository.error(e);
           first = false;
         });
@@ -758,10 +766,19 @@ class _CommunityChatPageState extends State<CommunityChatPage>
                   ],
                 ),
               ),
+              if (error != null && items.isNotEmpty)
+                MaterialBanner(
+                  content: const Text(
+                    'Chưa cập nhật được tin mới. Lịch sử đã tải vẫn được giữ.',
+                  ),
+                  actions: [
+                    TextButton(onPressed: load, child: const Text('Thử lại')),
+                  ],
+                ),
               Expanded(
                 child: first
                     ? const Center(child: CircularProgressIndicator())
-                    : error != null
+                    : error != null && items.isEmpty
                     ? CommunityEmpty(
                         'Chưa tải được tin nhắn',
                         error!,

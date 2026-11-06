@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +7,8 @@ import '../core/theme/colors.dart';
 import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
 import 'home_shell.dart';
+import 'password_recovery_view.dart';
+import '../core/theme/motion.dart';
 
 // ─────────────────────────────────────────
 // Entry: Auth Gate — Check if user is authenticated
@@ -79,7 +80,8 @@ class _LoginViewState extends State<LoginView>
     super.initState();
     _slideCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: MindraMotion.of(context.read<MindraState>().lowStimulationMode)
+          .mediumDuration,
     );
     _fadeAnim = CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
@@ -117,7 +119,7 @@ class _LoginViewState extends State<LoginView>
       _isLoading = true;
       _errorMessage = null;
     });
-    HapticFeedback.lightImpact();
+    MindraMotion.of(context.read<MindraState>().lowStimulationMode).light();
 
     final state = context.read<MindraState>();
     final email = _emailCtrl.text.trim();
@@ -136,7 +138,7 @@ class _LoginViewState extends State<LoginView>
       } else {
         await state.login(email, pass);
       }
-      HapticFeedback.mediumImpact();
+      MindraMotion.of(state.lowStimulationMode).medium();
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = _mapAuthError(e));
@@ -163,7 +165,7 @@ class _LoginViewState extends State<LoginView>
       _isLoading = true;
       _errorMessage = null;
     });
-    HapticFeedback.lightImpact();
+    MindraMotion.of(context.read<MindraState>().lowStimulationMode).light();
     try {
       await signIn();
     } catch (e) {
@@ -219,24 +221,57 @@ class _LoginViewState extends State<LoginView>
                     _buildHeader(),
                     const SizedBox(height: 40),
                     // ── Form ──
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          if (_isRegisterMode) ...[
-                            _buildNameField(),
+                    AutofillGroup(
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            if (_isRegisterMode) ...[
+                              _buildNameField(),
+                              const SizedBox(height: 14),
+                            ],
+                            _buildEmailField(),
                             const SizedBox(height: 14),
+                            _buildPasswordField(),
+                            if (_isRegisterMode) ...[
+                              const SizedBox(height: 14),
+                              _buildConfirmPasswordField(),
+                            ],
                           ],
-                          _buildEmailField(),
-                          const SizedBox(height: 14),
-                          _buildPasswordField(),
-                          if (_isRegisterMode) ...[
-                            const SizedBox(height: 14),
-                            _buildConfirmPasswordField(),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
+                    if (!_isRegisterMode)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () async {
+                                  final changed = await Navigator.of(context)
+                                      .push<bool>(
+                                        MaterialPageRoute(
+                                          builder: (_) => PasswordRecoveryView(
+                                            initialEmail: _emailCtrl.text
+                                                .trim(),
+                                          ),
+                                        ),
+                                      );
+                                  if (!context.mounted || changed != true) {
+                                    return;
+                                  }
+                                  _passCtrl.clear();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Đã đổi mật khẩu. Hãy đăng nhập bằng mật khẩu mới.',
+                                      ),
+                                    ),
+                                  );
+                                },
+                          child: const Text('Quên mật khẩu?'),
+                        ),
+                      ),
                     // ── Error ──
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 16),
@@ -333,6 +368,7 @@ class _LoginViewState extends State<LoginView>
     return _InputField(
       controller: _emailCtrl,
       label: 'Email',
+      autofillHints: const [AutofillHints.email],
       hint: 'ban@email.com',
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
@@ -348,6 +384,9 @@ class _LoginViewState extends State<LoginView>
     return _InputField(
       controller: _passCtrl,
       label: 'Mật khẩu',
+      autofillHints: [
+        _isRegisterMode ? AutofillHints.newPassword : AutofillHints.password,
+      ],
       hint: '••••••••',
       obscureText: _obscurePass,
       textInputAction: _isRegisterMode
@@ -355,6 +394,7 @@ class _LoginViewState extends State<LoginView>
           : TextInputAction.done,
       onSubmitted: _isRegisterMode ? null : (_) => _submit(),
       suffixIcon: IconButton(
+        tooltip: _obscurePass ? 'Hiện mật khẩu' : 'Ẩn mật khẩu',
         icon: Icon(
           _obscurePass
               ? Icons.visibility_outlined
@@ -383,6 +423,9 @@ class _LoginViewState extends State<LoginView>
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => _submit(),
       suffixIcon: IconButton(
+        tooltip: _obscureConfirm
+            ? 'Hiện mật khẩu xác nhận'
+            : 'Ẩn mật khẩu xác nhận',
         icon: Icon(
           _obscureConfirm
               ? Icons.visibility_outlined
@@ -410,7 +453,11 @@ class _LoginViewState extends State<LoginView>
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: AppColors.orange, size: 18),
+          const Icon(
+            Icons.error_outline,
+            color: AppColors.orangeText,
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -457,10 +504,11 @@ class _LoginViewState extends State<LoginView>
 
   Widget _buildToggleMode() {
     return Center(
-      child: GestureDetector(
+      child: TextButton(
         key: const ValueKey('toggle-auth-mode'),
-        onTap: _isLoading ? null : _toggleMode,
+        onPressed: _isLoading ? null : _toggleMode,
         child: RichText(
+          textScaler: MediaQuery.textScalerOf(context),
           text: TextSpan(
             style: AppTypography.bodySmall,
             children: [
@@ -584,6 +632,7 @@ class _InputField extends StatelessWidget {
   final String hint;
   final bool obscureText;
   final TextInputType? keyboardType;
+  final Iterable<String>? autofillHints;
   final TextInputAction? textInputAction;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
@@ -595,6 +644,7 @@ class _InputField extends StatelessWidget {
     required this.hint,
     this.obscureText = false,
     this.keyboardType,
+    this.autofillHints,
     this.textInputAction,
     this.suffixIcon,
     this.validator,
@@ -615,6 +665,7 @@ class _InputField extends StatelessWidget {
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          autofillHints: autofillHints,
           textInputAction: textInputAction,
           onFieldSubmitted: onSubmitted,
           validator: validator,
@@ -645,11 +696,17 @@ class _InputField extends StatelessWidget {
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.orange, width: 1.5),
+              borderSide: const BorderSide(
+                color: AppColors.orangeText,
+                width: 1.5,
+              ),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.orange, width: 1.8),
+              borderSide: const BorderSide(
+                color: AppColors.orangeText,
+                width: 1.8,
+              ),
             ),
             errorStyle: AppTypography.caption.copyWith(color: AppColors.orange),
           ),

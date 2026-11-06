@@ -61,7 +61,9 @@ class _ExploreViewState extends State<ExploreView> {
     ];
 
     return Container(
-      height: 48,
+      height:
+          48 +
+          (MediaQuery.textScalerOf(context).scale(14) - 14).clamp(0, 42) * 1.8,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppColors.creamDark,
@@ -99,20 +101,19 @@ class _ExploreViewState extends State<ExploreView> {
                             ]
                           : null,
                     ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            section.icon,
-                            size: 17,
-                            color: isSelected
-                                ? AppColors.ink
-                                : AppColors.textMuted,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          section.icon,
+                          size: 17,
+                          color: isSelected
+                              ? AppColors.ink
+                              : AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
                             section.label,
                             style: AppTypography.caption.copyWith(
                               color: isSelected
@@ -123,8 +124,8 @@ class _ExploreViewState extends State<ExploreView> {
                                   : FontWeight.w500,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

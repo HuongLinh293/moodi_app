@@ -5,6 +5,7 @@ import '../core/theme/colors.dart';
 import '../core/theme/motion.dart';
 import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
+import '../widgets/scrollable_panel.dart';
 
 class OnboardingView extends StatefulWidget {
   final VoidCallback? onFinished;
@@ -42,16 +43,22 @@ class _OnboardingViewState extends State<OnboardingView> {
     return MindraMotion.of(context.read<MindraState>().lowStimulationMode);
   }
 
-  void _nextPage() {
+  void _goToPage(int page) {
     final motion = _motion(context);
     motion.light();
-    if (_currentPage < 2) {
+    if (motion.reduced) {
+      _pageController.jumpToPage(page);
+    } else {
       _pageController.animateToPage(
-        _currentPage + 1,
+        page,
         duration: motion.mediumDuration,
         curve: Curves.easeInOutCubic,
       );
     }
+  }
+
+  void _nextPage() {
+    if (_currentPage < 2) _goToPage(_currentPage + 1);
   }
 
   void _finishOnboarding(MindraState state) {
@@ -84,78 +91,82 @@ class _OnboardingViewState extends State<OnboardingView> {
           color: AppColors.paper,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
                   decoration: BoxDecoration(
-                    color: AppColors.yellow.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text('✨', style: TextStyle(fontSize: 22)),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Moodi hoạt động ra sao?',
-                  style: AppTypography.headlineMedium.copyWith(
-                    fontWeight: FontWeight.w700,
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildHowItWorksStep(
-              number: '1',
-              title: 'Gọi tên cảm xúc & cường độ',
-              desc: 'Dừng lại 30 giây để nhận biết điều gì đang diễn ra bên trong bạn mà không phán xét.',
-              color: AppColors.yellow,
-            ),
-            const SizedBox(height: 14),
-            _buildHowItWorksStep(
-              number: '2',
-              title: 'Phản tư có hướng dẫn',
-              desc: 'Tách biệt giữa sự thật khách quan và các suy nghĩ đang phóng đại cảm xúc khó.',
-              color: AppColors.blue,
-            ),
-            const SizedBox(height: 14),
-            _buildHowItWorksStep(
-              number: '3',
-              title: 'Rèn luyện công cụ & khu vườn',
-              desc: 'Thực hành các kỹ thuật tiếp đất, tự trắc ẩn và nuôi dưỡng sự kiên định trong khu vườn tâm trí.',
-              color: AppColors.mint,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.ink,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text('Đã hiểu', style: AppTypography.button),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.yellow.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text('✨', style: TextStyle(fontSize: 22)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Moodi hoạt động ra sao?',
+                      style: AppTypography.headlineMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildHowItWorksStep(
+                number: '1',
+                title: 'Gọi tên cảm xúc & cường độ',
+                desc: 'Dừng lại 30 giây để nhận biết điều gì đang diễn ra bên trong bạn mà không phán xét.',
+                color: AppColors.yellow,
+              ),
+              const SizedBox(height: 14),
+              _buildHowItWorksStep(
+                number: '2',
+                title: 'Phản tư có hướng dẫn',
+                desc: 'Tách biệt giữa sự thật khách quan và các suy nghĩ đang phóng đại cảm xúc khó.',
+                color: AppColors.blue,
+              ),
+              const SizedBox(height: 14),
+              _buildHowItWorksStep(
+                number: '3',
+                title: 'Rèn luyện công cụ & khu vườn',
+                desc: 'Thực hành các kỹ thuật tiếp đất, tự trắc ẩn và nuôi dưỡng sự kiên định trong khu vườn tâm trí.',
+                color: AppColors.mint,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.ink,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text('Đã hiểu', style: AppTypography.button),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -226,61 +237,67 @@ class _OnboardingViewState extends State<OnboardingView> {
           color: AppColors.paper,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                const Icon(Icons.lock_outline, color: AppColors.ink, size: 24),
-                const SizedBox(width: 10),
-                Text(
-                  'Cam kết quyền riêng tư',
-                  style: AppTypography.headlineMedium.copyWith(
-                    fontWeight: FontWeight.w700,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '• Kiểm tra trạng thái đồng bộ của ghi chép. Nội dung chưa đồng bộ có thể chỉ được giữ trong phiên này.\n'
-              '• Gợi ý phản tư hỗ trợ tự nhìn lại cảm xúc, không phải chẩn đoán.\n'
-              '• Không bán dữ liệu, không chia sẻ với bên thứ ba cho mục đích quảng cáo.\n'
-              '• Bạn có thể xuất ghi chép trong Cài đặt. Việc xóa dữ liệu trên máy chủ cần kết nối và xác nhận thành công.',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.5,
               ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.ink,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.lock_outline,
+                    color: AppColors.ink,
+                    size: 24,
                   ),
-                ),
-                child: Text('Đóng', style: AppTypography.button),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Cam kết quyền riêng tư',
+                    style: AppTypography.headlineMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Text(
+                '• Kiểm tra trạng thái đồng bộ của ghi chép. Nội dung chưa đồng bộ có thể chỉ được giữ trong phiên này.\n'
+                '• Gợi ý phản tư hỗ trợ tự nhìn lại cảm xúc, không phải chẩn đoán.\n'
+                '• Không bán dữ liệu, không chia sẻ với bên thứ ba cho mục đích quảng cáo.\n'
+                '• Bạn có thể xuất ghi chép trong Cài đặt. Việc xóa dữ liệu trên máy chủ cần kết nối và xác nhận thành công.',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.ink,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text('Đóng', style: AppTypography.button),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -305,10 +322,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                       icon: const Icon(Icons.arrow_back_ios_new, size: 18),
                       color: AppColors.ink,
                       onPressed: () {
-                        _pageController.previousPage(
-                          duration: _motion(context).mediumDuration,
-                          curve: Curves.easeInOut,
-                        );
+                        _goToPage(_currentPage - 1);
                       },
                     )
                   else
@@ -343,9 +357,9 @@ class _OnboardingViewState extends State<OnboardingView> {
                 physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (page) => setState(() => _currentPage = page),
                 children: [
-                  _buildS01Welcome(),
-                  _buildS02Goals(),
-                  _buildS04Safety(state),
+                  ScrollablePanel(child: _buildS01Welcome()),
+                  ScrollablePanel(child: _buildS02Goals()),
+                  ScrollablePanel(child: _buildS04Safety(state)),
                 ],
               ),
             ),
@@ -476,7 +490,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           Text(
             'Mục tiêu của bạn',
             style: AppTypography.caption.copyWith(
-              color: AppColors.orange,
+              color: AppColors.orangeText,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
             ),
@@ -497,15 +511,14 @@ class _OnboardingViewState extends State<OnboardingView> {
             ),
           ),
           const SizedBox(height: 24),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _allGoals.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final goal = _allGoals[index];
-                final isSelected = _selectedGoals.contains(goal);
+          Column(
+            children: List.generate(_allGoals.length, (index) {
+              final goal = _allGoals[index];
+              final isSelected = _selectedGoals.contains(goal);
 
-                return InkWell(
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: InkWell(
                   onTap: () {
                     _motion(context).selection();
                     setState(() {
@@ -571,9 +584,9 @@ class _OnboardingViewState extends State<OnboardingView> {
                       ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            }),
           ),
           SizedBox(
             width: double.infinity,

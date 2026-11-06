@@ -99,6 +99,7 @@ class ReminderService {
       await _plugin.cancel(id: _id);
     } catch (e) {
       debugPrint('ReminderService: cancel error: $e');
+      rethrow;
     }
   }
 

@@ -916,123 +916,126 @@ void showJoinGardenDialog({
             child: GestureDetector(
               onTap: () => FocusScope.of(sheetContext).unfocus(),
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.line,
-                      borderRadius: BorderRadius.circular(4),
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.line,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Text('Tham gia vườn sẻ chia', style: AppTypography.titleMedium),
-                const SizedBox(height: 6),
-                Text(
-                  'Dán mã mời bắt đầu bằng "MD-" mà bạn đồng hành gửi cho bạn.',
-                  style: AppTypography.bodySmall,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: InputDecoration(
-                    hintText: 'Dán mã mời từ bạn đồng hành',
-                    errorText: errorText,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    prefixIcon: const Icon(Icons.vpn_key_rounded),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Tham gia vườn sẻ chia',
+                    style: AppTypography.titleMedium,
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: const ValueKey('shared-display-name'),
-                  controller: nameController,
-                  maxLength: 40,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    labelText: 'Tên bạn đồng hành sẽ thấy',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    prefixIcon: const Icon(Icons.person_outline_rounded),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Dán mã mời bắt đầu bằng "MD-" mà bạn đồng hành gửi cho bạn.',
+                    style: AppTypography.bodySmall,
                   ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () async {
-                            final code = controller.text.trim();
-                            final name = nameController.text.trim();
-                            if (code.isEmpty || name.isEmpty) {
-                              setDialogState(
-                                () => errorText = code.isEmpty
-                                    ? 'Vui lòng nhập mã'
-                                    : 'Hãy nhập tên để bạn đồng hành nhận ra bạn',
-                              );
-                              return;
-                            }
-                            setDialogState(() {
-                              isLoading = true;
-                              errorText = null;
-                            });
-                            bool success;
-                            try {
-                              success = await state.joinSharedGarden(
-                                code,
-                                displayName: name,
-                              );
-                            } catch (error) {
-                              if (sheetContext.mounted) {
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      hintText: 'Dán mã mời từ bạn đồng hành',
+                      errorText: errorText,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.vpn_key_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('shared-display-name'),
+                    controller: nameController,
+                    maxLength: 40,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: InputDecoration(
+                      labelText: 'Tên bạn đồng hành sẽ thấy',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      prefixIcon: const Icon(Icons.person_outline_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: isLoading
+                          ? null
+                          : () async {
+                              final code = controller.text.trim();
+                              final name = nameController.text.trim();
+                              if (code.isEmpty || name.isEmpty) {
+                                setDialogState(
+                                  () => errorText = code.isEmpty
+                                      ? 'Vui lòng nhập mã'
+                                      : 'Hãy nhập tên để bạn đồng hành nhận ra bạn',
+                                );
+                                return;
+                              }
+                              setDialogState(() {
+                                isLoading = true;
+                                errorText = null;
+                              });
+                              bool success;
+                              try {
+                                success = await state.joinSharedGarden(
+                                  code,
+                                  displayName: name,
+                                );
+                              } catch (error) {
+                                if (sheetContext.mounted) {
+                                  setDialogState(() {
+                                    isLoading = false;
+                                    errorText = gardenErrorMessage(error);
+                                  });
+                                }
+                                return;
+                              }
+                              if (!sheetContext.mounted) return;
+                              if (success) {
+                                if (sheetContext.mounted) {
+                                  Navigator.pop(sheetContext);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Đã tham gia vườn sẻ chia thành công! 🌱',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } else {
                                 setDialogState(() {
                                   isLoading = false;
-                                  errorText = gardenErrorMessage(error);
+                                  errorText = 'Không tìm thấy vườn với mã này. Hãy kiểm tra lại nhé.';
                                 });
                               }
-                              return;
-                            }
-                            if (!sheetContext.mounted) return;
-                            if (success) {
-                              if (sheetContext.mounted) {
-                                Navigator.pop(sheetContext);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Đã tham gia vườn sẻ chia thành công! 🌱',
-                                    ),
-                                  ),
-                                );
-                              }
-                            } else {
-                              setDialogState(() {
-                                isLoading = false;
-                                errorText = 'Không tìm thấy vườn với mã này. Hãy kiểm tra lại nhé.';
-                              });
-                            }
-                          },
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Tham gia ngay'),
+                            },
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Tham gia ngay'),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             ),
           ),
         ),

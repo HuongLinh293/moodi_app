@@ -62,6 +62,7 @@ class _GardenViewState extends State<GardenView> {
       state: widget.state,
       moment: moment,
       onOpenJournal: () {
+        widget.state.openJournal(entryId: moment.entryId);
         widget.onOpenJournal?.call();
       },
     );
@@ -255,7 +256,8 @@ class _GardenViewState extends State<GardenView> {
                 GardenBedView(
                   state: state,
                   bed: bed,
-                  reducedMotion: state.lowStimulationMode,
+                  reducedMotion: MindraMotion.of(state.lowStimulationMode)
+                      .reduced,
                   onOpenMoment: _openMoment,
                 ),
                 const SizedBox(height: 16),

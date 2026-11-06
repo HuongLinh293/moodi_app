@@ -4,6 +4,9 @@ import { Between, DataSource, FindOptionsWhere, MoreThanOrEqual, LessThanOrEqual
 import { v4 as uuid } from 'uuid';
 import { JournalEntry } from './entities/journal-entry.entity';
 import { SaveEntryDto } from './dto/save-entry.dto';
+import { PracticeRecord } from '../practice/practice.entity';
+import { AiReflection } from '../reflections/entities/ai-reflection.entity';
+import { GardenMoment } from '../moments/entities/garden-moment.entity';
 import { User } from '../users/entities/user.entity';
 import {
   SharedMoment,
@@ -81,7 +84,13 @@ export class EntriesService {
     });
 
     // Upsert theo (userId, id) để PUT lặp lại khi đồng bộ không tạo bản trùng.
-    await this.entriesRepository.save(entry);
+    await this.dataSource.transaction(async (manager) => {
+      const previous = await manager.findOne(JournalEntry, { where: { userId: user.id, id: entry.id } });
+      if (previous && (previous.emotionKey !== entry.emotionKey || previous.intensity !== entry.intensity || previous.situation !== entry.situation || previous.thought !== entry.thought)) {
+        await manager.delete(AiReflection, { userId: user.id, entryId: entry.id });
+      }
+      await manager.save(JournalEntry, entry);
+    });
     return this.findById(user, entry.id);
   }
 
@@ -98,12 +107,25 @@ export class EntriesService {
         });
         await manager.delete(SharedMoment, { gardenId: moment.gardenId, id: moment.id });
       }
+      await manager.delete(PracticeRecord, { userId: user.id, sourceEntryId: id });
+      await manager.delete(AiReflection, { userId: user.id, entryId: id });
+      await manager.delete(GardenMoment, { userId: user.id, entryId: id });
       await manager.delete(JournalEntry, { userId: user.id, id });
     });
   }
 
   async deleteAll(user: User): Promise<void> {
-    await this.entriesRepository.delete({ userId: user.id });
+    await this.dataSource.transaction(async (manager) => {
+      const shared = await manager.find(SharedMoment, { where: { authorId: user.id } });
+      for (const moment of shared) {
+        await manager.delete(SharedMomentCare, { gardenId: moment.gardenId, momentId: moment.id });
+        await manager.delete(SharedMoment, { gardenId: moment.gardenId, id: moment.id });
+      }
+      await manager.delete(PracticeRecord, { userId: user.id });
+      await manager.delete(AiReflection, { userId: user.id });
+      await manager.delete(GardenMoment, { userId: user.id });
+      await manager.delete(JournalEntry, { userId: user.id });
+    });
   }
 
   private parseDate(value?: string): Date | null {
