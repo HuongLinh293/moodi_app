@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import '../core/theme/colors.dart';
 import '../core/theme/motion.dart';
 import '../core/theme/typography.dart';
-import '../models/journal_entry.dart';
 import '../models/emotion.dart';
 import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
+import '../widgets/scrollable_panel.dart';
 
 class PauseModeSheet extends StatefulWidget {
   final MindraState state;
@@ -29,7 +29,7 @@ class PauseModeSheet extends StatefulWidget {
 }
 
 class _PauseModeSheetState extends State<PauseModeSheet>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   int _currentStep = 0; // 0: Body, 1: Breath, 2: Emotion, 3: Action
 
   // Step 1: Body Sensation
@@ -75,8 +75,8 @@ class _PauseModeSheetState extends State<PauseModeSheet>
   int _breathCyclesLeft = 3;
 
   // Step 3: Emotion Labeling
-  String _selectedEmotionKey = 'stressed';
-  bool _isNotSure = false;
+  String? _selectedEmotionKey;
+  bool _isNotSure = true;
 
   // Step 4: Next Action
   String _selectedAction = 'Uống một ngụm nước ấm';
@@ -112,6 +112,31 @@ class _PauseModeSheetState extends State<PauseModeSheet>
   void initState() {
     super.initState();
     _initBreathAnimation();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  void _setStep(int step) {
+    _breathController.stop();
+    setState(() => _currentStep = step);
+    if (step == 1) {
+      _breathCyclesLeft = 3;
+      _breathPhaseText = 'Hít vào chậm...';
+      _breathController.forward(from: 0);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_currentStep != 1) return;
+    if (state != AppLifecycleState.resumed) {
+      _breathController.stop(canceled: false);
+    } else if (_breathCyclesLeft > 0) {
+      if (_breathPhaseText.startsWith('Thở ra')) {
+        _breathController.reverse();
+      } else {
+        _breathController.forward();
+      }
+    }
   }
 
   void _initBreathAnimation() {
@@ -141,53 +166,43 @@ class _PauseModeSheetState extends State<PauseModeSheet>
           // Finished breath cycles
           MindraMotion.of(widget.state.lowStimulationMode).light();
           setState(() {
-            _breathPhaseText = 'Tốt lắm, cơ thể đã nhận được oxy.';
+            _breathCyclesLeft = 0;
+            _breathPhaseText =
+                'Đã hết nhịp hướng dẫn. Hãy ghi nhận cảm giác của bạn.';
           });
         }
       }
     });
-
-    _breathController.forward();
   }
 
   @override
   void dispose() {
     _breathPhaseTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _breathController.dispose();
     super.dispose();
   }
 
   void _savePauseModeEntry() {
     MindraMotion.of(widget.state.lowStimulationMode).medium();
-    final emoKey = _isNotSure ? 'calm' : _selectedEmotionKey;
-    final emo = MindraEmotions.get(emoKey);
-
-    final entry = JournalEntry(
-      id: 'pause-${DateTime.now().millisecondsSinceEpoch}',
-      timestamp: DateTime.now(),
-      emotionKey: emoKey,
-      intensity: 3,
-      trigger: 'Tạm dừng khi quá tải',
-      situation:
-          'Pause Mode: ${_selectedSensation ?? "Cơ thể căng thẳng"} · Tiếp theo: $_selectedAction',
-      thought: _isNotSure
-          ? 'Tôi chưa rõ cảm xúc hiện tại, nhưng tôi đã cho phép mình dừng lại 1 phút.'
-          : emo.defaultThought,
-      response: _selectedAction,
-      exerciseDone: true,
+    final messenger = ScaffoldMessenger.of(context);
+    widget.state.recordPractice(
       exerciseId: 'response-pause',
-      afterIntensity: 2,
+      note: [
+        ?_selectedSensation,
+        'Tiếp theo: $_selectedAction',
+        if (_isNotSure) 'Chưa rõ cảm xúc',
+      ].join(' · '),
+      afterEmotionKey: _isNotSure ? null : _selectedEmotionKey,
     );
-
-    widget.state.addEntry(entry);
-    widget.onClose();
 
     if (_selectedAction == 'Thực hành bài tập điều hòa') {
       widget.onOpenPractice();
     } else if (_selectedAction == 'Viết ra những suy nghĩ này') {
       widget.onOpenFullCheckin();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      widget.onClose();
+      messenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -242,37 +257,43 @@ class _PauseModeSheetState extends State<PauseModeSheet>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.blue.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'KHOẢNG NGHỈ',
-                          style: AppTypography.kicker.copyWith(
-                            color: AppColors.blue,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 10,
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.blue.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'KHOẢNG NGHỈ',
+                            style: AppTypography.kicker.copyWith(
+                              color: AppColors.blue,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Bước ${_currentStep + 1}/4',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textTertiary,
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(width: 8),
+                        Text(
+                          'Bước ${_currentStep + 1}/4',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textTertiary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   IconButton(
+                    tooltip: 'Đóng khoảng nghỉ',
                     onPressed: widget.onClose,
                     icon: const Icon(
                       Icons.close_rounded,
@@ -314,7 +335,7 @@ class _PauseModeSheetState extends State<PauseModeSheet>
       case 0:
         return _buildStep1BodySensation();
       case 1:
-        return _buildStep2Breath();
+        return ScrollablePanel(child: _buildStep2Breath());
       case 2:
         return _buildStep3Emotion();
       case 3:
@@ -423,7 +444,7 @@ class _PauseModeSheetState extends State<PauseModeSheet>
             child: ElevatedButton(
               onPressed: () {
                 MindraMotion.of(widget.state.lowStimulationMode).light();
-                setState(() => _currentStep = 1);
+                _setStep(1);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.ink,
@@ -482,7 +503,9 @@ class _PauseModeSheetState extends State<PauseModeSheet>
             animation: _breathScale,
             builder: (context, child) {
               return Transform.scale(
-                scale: _breathScale.value,
+                scale: MindraMotion.of(widget.state.lowStimulationMode).reduced
+                    ? 1
+                    : _breathScale.value,
                 child: Container(
                   width: 170,
                   height: 170,
@@ -545,7 +568,7 @@ class _PauseModeSheetState extends State<PauseModeSheet>
                 child: OutlinedButton(
                   onPressed: () {
                     MindraMotion.of(widget.state.lowStimulationMode).light();
-                    setState(() => _currentStep = 2);
+                    _setStep(2);
                   },
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppColors.line),
@@ -566,7 +589,7 @@ class _PauseModeSheetState extends State<PauseModeSheet>
                 child: ElevatedButton(
                   onPressed: () {
                     MindraMotion.of(widget.state.lowStimulationMode).light();
-                    setState(() => _currentStep = 2);
+                    _setStep(2);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.ink,
@@ -732,7 +755,7 @@ class _PauseModeSheetState extends State<PauseModeSheet>
                   if (_isNotSure)
                     const Icon(
                       Icons.check_circle_rounded,
-                      color: AppColors.orange,
+                      color: AppColors.orangeText,
                       size: 20,
                     ),
                 ],
@@ -747,7 +770,7 @@ class _PauseModeSheetState extends State<PauseModeSheet>
             child: ElevatedButton(
               onPressed: () {
                 MindraMotion.of(widget.state.lowStimulationMode).light();
-                setState(() => _currentStep = 3);
+                _setStep(3);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.ink,

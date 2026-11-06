@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/colors.dart';
+import '../core/theme/motion.dart';
 import '../core/theme/typography.dart';
 
 enum GardenWeather {
@@ -95,7 +96,7 @@ class _GardenWeatherAtmosphereState extends State<GardenWeatherAtmosphere>
   AnimationController? _controller;
 
   bool get _canAnimate {
-    if (widget.reducedMotion) return false;
+    if (MindraMotion.of(widget.reducedMotion).reduced) return false;
     if (kIsWeb) return true;
     try {
       if (Platform.environment.containsKey('FLUTTER_TEST')) return false;
@@ -103,15 +104,34 @@ class _GardenWeatherAtmosphereState extends State<GardenWeatherAtmosphere>
     return true;
   }
 
+  void _syncAnimation() {
+    if (!_canAnimate) {
+      _controller?.stop();
+      return;
+    }
+    _controller ??= AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    );
+    if (!_controller!.isAnimating) _controller!.repeat();
+  }
+
   @override
   void initState() {
     super.initState();
-    if (_canAnimate) {
-      _controller = AnimationController(
-        vsync: this,
-        duration: const Duration(seconds: 8),
-      )..repeat();
-    }
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant GardenWeatherAtmosphere oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimation();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAnimation();
   }
 
   @override
@@ -122,7 +142,7 @@ class _GardenWeatherAtmosphereState extends State<GardenWeatherAtmosphere>
 
   @override
   Widget build(BuildContext context) {
-    if (!_canAnimate) {
+    if (MediaQuery.disableAnimationsOf(context) || !_canAnimate) {
       return CustomPaint(
         painter: _WeatherStaticPainter(weather: widget.weather),
       );

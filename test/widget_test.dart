@@ -21,16 +21,18 @@ import 'helpers/test_data.dart';
 
 MindraState createTestState() {
   return MindraState(
-    initialEntries: TestData.getInitialEntries(),
-    initialMicroGoals: [
-      MicroGoal(
-        id: 'mg-1',
-        prompt: 'Khi cảm thấy căng thẳng dồn dập, tôi sẽ dừng lại 30 giây và hít thở sâu 3 nhịp.',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-    ],
-    isAuthenticated: true,
-  )..completeOnboarding();
+      initialEntries: TestData.getInitialEntries(),
+      initialMicroGoals: [
+        MicroGoal(
+          id: 'mg-1',
+          prompt: 'Khi cảm thấy căng thẳng dồn dập, tôi sẽ dừng lại 30 giây và hít thở sâu 3 nhịp.',
+          createdAt: DateTime.now().subtract(const Duration(days: 1)),
+        ),
+      ],
+      isAuthenticated: true,
+    )
+    ..completeOnboarding()
+    ..setAiConsent(true);
 }
 
 void main() {
@@ -52,29 +54,30 @@ void main() {
     expect(find.byType(HomeShell), findsNothing);
   });
 
-  testWidgets('Quick save only reports status, without a second garden prompt', (
-    tester,
-  ) async {
-    final state = MindraState()
-      ..clearAllData()
-      ..selectEmotion('calm');
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: CheckinView(state: state, onOpenJournal: () {}),
+  testWidgets(
+    'Quick save only reports status, without a second garden prompt',
+    (tester) async {
+      final state = MindraState()
+        ..clearAllData()
+        ..selectEmotion('calm');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CheckinView(state: state, onOpenJournal: () {}),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Lưu check-in nhanh'));
-    await tester.pumpAndSettle();
-    expect(state.entries, hasLength(1));
-    // HomeShell hỏi "Giữ trong vườn" bằng sheet; snackbar không hỏi lại.
-    expect(find.text('Giữ trong vườn'), findsNothing);
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(find.byType(SnackBar), findsNothing);
-  });
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lưu check-in nhanh'));
+      await tester.pumpAndSettle();
+      expect(state.entries, hasLength(1));
+      // HomeShell hỏi "Giữ trong vườn" bằng sheet; snackbar không hỏi lại.
+      expect(find.text('Giữ trong vườn'), findsNothing);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsNothing);
+    },
+  );
 
   testWidgets('Mindra app launches and shows HomeShell', (
     WidgetTester tester,
@@ -103,7 +106,7 @@ void main() {
     expect(find.text('Tôi'), findsOneWidget);
     expect(find.text('MOODI GARDEN'), findsOneWidget);
     expect(find.text('Xem thêm cảm xúc'), findsNothing);
-    expect(find.text('Nghỉ 30 giây'), findsOneWidget);
+    expect(find.text('Khoảng nghỉ có hướng dẫn'), findsOneWidget);
 
     final openGardenButton = find.text('Mở khu vườn');
     await tester.ensureVisible(openGardenButton);
@@ -497,6 +500,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mở bài kiểm thử'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Ghi nhận trước bài tập (tùy chọn)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lo lắng'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('4').first);
+    await tester.tap(find.text('4').first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Bắt đầu'));
     await tester.tap(find.text('Bắt đầu'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Hoàn thành bài tập'));
@@ -504,6 +515,12 @@ void main() {
     await tester.tap(find.text('Check-in lại cảm xúc'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Bình yên').last);
+    await tester.tap(find.text('Bình yên').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('2').first);
+    await tester.tap(find.text('2').first);
+    await tester.pumpAndSettle();
     expect(find.text('PHẢN HỒI TÙY CHỌN'), findsOneWidget);
     final usefulnessRating = find.descendant(
       of: find.byKey(const ValueKey('exercise-usefulness')),
@@ -531,7 +548,7 @@ void main() {
     await tester.tap(find.text('Lưu cảm xúc sau bài tập'));
     await tester.pumpAndSettle();
 
-    final savedEntry = state.entries.firstWhere(
+    final savedEntry = state.practiceRecords.firstWhere(
       (entry) => entry.exerciseId == 'feedback-test',
     );
     expect(savedEntry.usefulnessRating, 4);
@@ -698,7 +715,7 @@ void main() {
     await tester.tap(find.text('Lưu check-in nhanh'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Đã lưu check-in'), findsOneWidget);
+    expect(find.text('Đã ghi nhận check-in'), findsOneWidget);
     expect(state.gardenMoments, isEmpty);
 
     await tester.tap(find.text('Giữ trong vườn').last);

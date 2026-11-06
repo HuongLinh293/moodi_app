@@ -127,9 +127,7 @@ class _MoodTrendCardState extends State<MoodTrendCard> {
             active.isEmpty
                 ? 'Chưa có ghi nhận nào trong $_days ngày qua.'
                 : 'Có mặt ${active.length}/$_days ngày · cường độ trung bình ${avg.toStringAsFixed(1)}/5',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textMuted,
-            ),
+            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: 18),
           SizedBox(
@@ -231,10 +229,11 @@ class _MoodTrendCardState extends State<MoodTrendCard> {
             color: color,
             borderRadius: BorderRadius.circular(_days == 7 ? 8 : 3),
             border: Border.all(
-              color: (palette != null && palette.length > 1
-                      ? palette[1]
-                      : AppColors.ink)
-                  .withValues(alpha: 0.15),
+              color:
+                  (palette != null && palette.length > 1
+                          ? palette[1]
+                          : AppColors.ink)
+                      .withValues(alpha: 0.15),
             ),
           ),
         ),

@@ -132,7 +132,7 @@ Future<void> showCrisisSupportSheet(BuildContext context) {
             const Icon(
               Icons.favorite_rounded,
               size: 28,
-              color: AppColors.orange,
+              color: AppColors.orangeText,
             ),
             const SizedBox(height: 10),
             Text(

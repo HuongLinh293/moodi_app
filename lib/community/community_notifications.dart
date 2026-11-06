@@ -37,9 +37,6 @@ class _CommunityNotificationsPageState
         items = rows(data['items']);
         error = null;
       });
-      if (items!.any((item) => item['isRead'] != true)) {
-        await widget.repo.mutate('markNotificationsRead', const {});
-      }
     } catch (e) {
       if (mounted) setState(() => error = CommunityRepository.error(e));
     }
@@ -58,6 +55,18 @@ class _CommunityNotificationsPageState
   };
 
   Future<void> open(Json item) async {
+    if (item['isRead'] != true) {
+      try {
+        await widget.repo.mutate('markNotificationsRead', {
+          'notificationId': item['id'],
+        });
+        if (!mounted) return;
+        setState(() => item['isRead'] = true);
+      } catch (e) {
+        if (mounted) communityError(context, e);
+      }
+    }
+    if (!mounted) return;
     final type = item['type'] as String? ?? '';
     final data = item['data'] is Map ? json(item['data']) : <String, dynamic>{};
     Widget? page;
@@ -69,13 +78,13 @@ class _CommunityNotificationsPageState
         space: data['space'],
         postId: data['postId'],
       );
-    } else if (type == 'community_group_invite') {
+    } else if (type == 'community_group_invite' && data['space'] != null) {
       page = CommunityGroupPage(
         repo: widget.repo,
         space: data['space'],
         name: data['groupName'] ?? 'Nhóm riêng',
       );
-    } else if (type == 'community_message') {
+    } else if (type == 'community_message' && data['target'] != null) {
       page = CommunityChatPage(
         repo: widget.repo,
         target: data['target'],
@@ -84,7 +93,15 @@ class _CommunityNotificationsPageState
     } else if (data['target'] != null) {
       page = CommunityProfilePage(repo: widget.repo, target: data['target']);
     }
-    if (page != null && mounted) await communityPush(context, page);
+    if (page != null && mounted) {
+      await communityPush(context, page);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thông báo này không còn có nội dung để mở.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -172,7 +189,7 @@ class _CommunityNotificationsPageState
                                   width: 8,
                                   height: 8,
                                   decoration: const BoxDecoration(
-                                    color: AppColors.orange,
+                                    color: AppColors.orangeText,
                                     shape: BoxShape.circle,
                                   ),
                                 ),

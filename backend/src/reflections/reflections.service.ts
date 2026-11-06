@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { createHash } from 'crypto';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, QueryFailedError, Repository,
@@ -43,8 +44,11 @@ export class ReflectionsService {
   async generate(user: User, dto: GenerateReflectionDto): Promise<any> {
     const situation = dto.situation ?? '';
     const thought = dto.thought ?? '';
+    const inputHash = this.inputHash(dto.emotionKey, dto.intensity, situation, thought);
 
     const entryId = dto.entryId?.trim() || null;
+    // So nội dung trước khi gọi AI để không trả tiền cho yêu cầu chắc chắn bị từ chối.
+    if (entryId) await this.assertEntryMatches(user, entryId, inputHash, 'Ghi chép chưa được đồng bộ hoặc đã xóa.');
     const existing = entryId
       ? await this.reflectionsRepository.findOne({ where: { userId: user.id, entryId } })
       : null;
@@ -56,14 +60,17 @@ export class ReflectionsService {
     if (this.isCrisis(situation, thought)) {
       source = 'safety';
       result = this.safetyResult();
-    } else if (existing) {
+    } else if (existing && existing.result._inputHash === inputHash) {
       return this.toResponse(existing);
     } else {
       result = await this.fromGemini(dto.emotionKey, dto.intensity, situation, thought);
       if (result) source = 'ai';
     }
     result ??= this.fromTemplate(dto.emotionKey, situation, thought);
+    result = { ...result, _inputHash: inputHash };
 
+    // Ghi chép có thể bị sửa/xóa trong lúc chờ AI.
+    if (entryId) await this.assertEntryMatches(user, entryId, inputHash, 'Ghi chép đã bị xóa.');
     const saved = existing
       ? await this.reflectionsRepository.save({
           ...existing,
@@ -71,6 +78,8 @@ export class ReflectionsService {
           intensity: dto.intensity,
           result,
           source,
+          feedback: null,
+          helpful: null,
         })
       : await this.insertOrExisting(
           this.reflectionsRepository.create({
@@ -85,6 +94,18 @@ export class ReflectionsService {
           }),
         );
     return this.toResponse(saved);
+  }
+
+  private inputHash(emotionKey: string, intensity: number, situation: string, thought: string) {
+    return createHash('sha256').update(JSON.stringify([emotionKey, intensity, situation, thought])).digest('hex');
+  }
+
+  private async assertEntryMatches(user: User, entryId: string, inputHash: string, missing: string) {
+    const entry = await this.entriesRepository.findOne({ where: { userId: user.id, id: entryId } });
+    if (!entry) throw new NotFoundException(missing);
+    if (this.inputHash(entry.emotionKey, entry.intensity, entry.situation ?? '', entry.thought ?? '') !== inputHash) {
+      throw new ConflictException('Ghi chép đã thay đổi. Hãy mở lại gợi ý.');
+    }
   }
 
   // Hai yêu cầu song song cho cùng entry: yêu cầu về sau chạm unique index
@@ -120,13 +141,14 @@ export class ReflectionsService {
   }
 
   async feedback(user: User, id: string, dto: ReflectionFeedbackDto): Promise<void> {
-    const updated = await this.reflectionsRepository.update(
-      { id, userId: user.id },
-      { feedback: dto.feedback, helpful: dto.helpful },
-    );
-    if (!updated.affected) {
-      throw new NotFoundException('Phản tư không tồn tại');
-    }
+    const reflection = await this.reflectionsRepository.findOne({ where: { id, userId: user.id } });
+    if (!reflection) throw new NotFoundException('Phản tư không tồn tại');
+    // A user may edit their wording; provider provenance and safety decisions
+    // are never accepted from the client.
+    await this.reflectionsRepository.save({
+      ...reflection, feedback: dto.feedback, helpful: dto.helpful,
+      result: reflection.source === 'safety' || !dto.edits ? reflection.result : { ...reflection.result, ...dto.edits },
+    });
   }
 
   recommendExercise(emotionKey: string, intensity: number) {
@@ -369,7 +391,7 @@ Trả về đúng JSON với các trường:
     return {
       id: reflection.id,
       entryId: reflection.entryId,
-      ...reflection.result,
+      ...Object.fromEntries(Object.entries(reflection.result).filter(([key]) => key !== '_inputHash')),
       userFeedback: reflection.feedback,
       helpful: reflection.helpful,
       source: reflection.source,

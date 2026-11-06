@@ -118,11 +118,12 @@ class ReflectionRepository {
     required String reflectionId,
     required String feedback,
     required bool helpful,
+    Map<String, dynamic>? edits,
   }) async {
     try {
       await _httpClient.post(
         '${ApiConfig.reflectionEndpoint}/$reflectionId/feedback',
-        body: {'feedback': feedback, 'helpful': helpful},
+        body: {'feedback': feedback, 'helpful': helpful, 'edits': ?edits},
       );
 
       debugPrint('ReflectionRepository: Feedback saved successfully');

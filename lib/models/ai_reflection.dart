@@ -1,6 +1,7 @@
 import '../core/crisis_detector.dart';
 
 class AIReflection {
+  final String? id;
   final List<String> possibleEmotions;
   final String possibleTrigger;
   final String intensifyingThought;
@@ -19,6 +20,7 @@ class AIReflection {
   final String source;
 
   const AIReflection({
+    this.id,
     required this.possibleEmotions,
     required this.possibleTrigger,
     required this.intensifyingThought,
@@ -35,6 +37,7 @@ class AIReflection {
   });
 
   AIReflection copyWith({
+    String? id,
     List<String>? possibleEmotions,
     String? possibleTrigger,
     String? intensifyingThought,
@@ -49,6 +52,7 @@ class AIReflection {
     bool? recommendationsDismissed,
   }) {
     return AIReflection(
+      id: id ?? this.id,
       possibleEmotions: possibleEmotions ?? this.possibleEmotions,
       possibleTrigger: possibleTrigger ?? this.possibleTrigger,
       intensifyingThought: intensifyingThought ?? this.intensifyingThought,
@@ -181,6 +185,7 @@ class AIReflection {
 
   Map<String, dynamic> toFirestore() {
     return {
+      'id': id,
       'possibleEmotions': possibleEmotions,
       'possibleTrigger': possibleTrigger,
       'intensifyingThought': intensifyingThought,
@@ -201,6 +206,7 @@ class AIReflection {
 
   factory AIReflection.fromFirestore(Map<String, dynamic> data) {
     return AIReflection(
+      id: data['id'] as String?,
       possibleEmotions:
           (data['possibleEmotions'] as List<dynamic>?)
               ?.map((e) => e.toString())

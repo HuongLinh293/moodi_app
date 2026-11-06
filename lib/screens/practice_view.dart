@@ -30,6 +30,7 @@ class _PracticeViewState extends State<PracticeView> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => PracticeSessionSheet(state: widget.state, config: config),
     );
@@ -44,6 +45,7 @@ class _PracticeViewState extends State<PracticeView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           RichText(
+            textScaler: MediaQuery.textScalerOf(context),
             text: TextSpan(
               style: AppTypography.displayMedium.copyWith(fontSize: 32),
               children: [
@@ -52,7 +54,7 @@ class _PracticeViewState extends State<PracticeView> {
                   text: 'tâm trí bạn.',
                   style: TextStyle(
                     fontStyle: FontStyle.italic,
-                    color: AppColors.orange,
+                    color: AppColors.orangeText,
                   ),
                 ),
               ],
@@ -98,7 +100,7 @@ class _PracticeViewState extends State<PracticeView> {
             ),
             child: const Icon(
               Icons.description_outlined,
-              color: AppColors.orange,
+              color: AppColors.orangeText,
               size: 26,
             ),
           ),
@@ -107,7 +109,7 @@ class _PracticeViewState extends State<PracticeView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -121,7 +123,7 @@ class _PracticeViewState extends State<PracticeView> {
                       child: Text(
                         'THẢ CẢM XÚC RA',
                         style: AppTypography.kicker.copyWith(
-                          color: AppColors.orange,
+                          color: AppColors.orangeText,
                           fontWeight: FontWeight.w800,
                           fontSize: 10,
                         ),
@@ -149,7 +151,7 @@ class _PracticeViewState extends State<PracticeView> {
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.orange,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.ink,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -196,9 +198,9 @@ class _PracticeViewState extends State<PracticeView> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              'KHOẢNG DỪNG · 30 GIÂY',
+              'KHOẢNG NGHỈ · 4 BƯỚC',
               style: AppTypography.kicker.copyWith(
-                color: AppColors.orange,
+                color: AppColors.orangeText,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -235,7 +237,7 @@ class _PracticeViewState extends State<PracticeView> {
               onPressed: widget.onOpenPause,
               icon: const Icon(Icons.play_arrow_rounded, size: 20),
               label: Text(
-                'Nghỉ 30 giây',
+                'Khoảng nghỉ có hướng dẫn',
                 style: AppTypography.button.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,

@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../core/theme/colors.dart';
+import '../core/theme/motion.dart';
 import '../core/theme/shadows.dart';
 import '../core/theme/typography.dart';
 import '../models/emotion.dart';
@@ -17,7 +17,7 @@ class WeeklyPostcardSheet extends StatefulWidget {
   const WeeklyPostcardSheet({super.key, required this.state});
 
   static Future<void> show(BuildContext context, MindraState state) {
-    HapticFeedback.mediumImpact();
+    MindraMotion.of(state.lowStimulationMode).medium();
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -64,7 +64,15 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
   }
 
   void _toggleFlip() {
-    HapticFeedback.selectionClick();
+    final motion = MindraMotion.of(widget.state.lowStimulationMode);
+    motion.selection();
+    if (motion.reduced) {
+      setState(() {
+        _showBack = !_showBack;
+        _flipController.value = _showBack ? 1 : 0;
+      });
+      return;
+    }
     if (_flipController.isCompleted) {
       _flipController.reverse();
     } else {
@@ -259,7 +267,8 @@ class _WeeklyPostcardSheetState extends State<WeeklyPostcardSheet>
                               ),
                             ),
                             onPressed: () {
-                              HapticFeedback.lightImpact();
+                              MindraMotion.of(widget.state.lowStimulationMode)
+                                  .light();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: const Text(

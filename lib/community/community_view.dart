@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../core/theme/colors.dart';
 import '../core/theme/typography.dart';
 import '../state/mindra_state.dart';
+import '../core/http_client.dart';
 import 'community_repository.dart';
 import 'community_widgets.dart';
 import 'community_posts.dart';
@@ -86,7 +87,15 @@ class _CommunityViewState extends State<CommunityView> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => error = CommunityRepository.error(e));
+      if (mounted) {
+        setState(() {
+          error = CommunityRepository.error(e);
+          if (e is ApiException &&
+              ['permission-denied', 'unauthenticated'].contains(e.code)) {
+            bootstrap = null;
+          }
+        });
+      }
     } finally {
       loading = false;
     }
@@ -192,7 +201,7 @@ class _CommunityViewState extends State<CommunityView> {
 
   @override
   Widget build(BuildContext context) {
-    if (error != null) {
+    if (error != null && bootstrap == null) {
       return ListView(
         children: [
           CommunityEmpty(
@@ -227,6 +236,15 @@ class _CommunityViewState extends State<CommunityView> {
     final pending = bootstrap!['pending'] as int? ?? 0;
     return Column(
       children: [
+        if (error != null)
+          MaterialBanner(
+            content: Text(
+              'Chưa cập nhật được. Bạn vẫn có thể xem nội dung đã tải. $error',
+            ),
+            actions: [
+              TextButton(onPressed: load, child: const Text('Thử lại')),
+            ],
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 12, 8),
           child: Column(
@@ -322,6 +340,7 @@ class _CommunityViewState extends State<CommunityView> {
               Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: RichText(
+                  textScaler: MediaQuery.textScalerOf(context),
                   text: TextSpan(
                     style: AppTypography.displayMedium.copyWith(fontSize: 26),
                     children: const [
@@ -330,7 +349,7 @@ class _CommunityViewState extends State<CommunityView> {
                         text: 'để sẻ chia.',
                         style: TextStyle(
                           fontStyle: FontStyle.italic,
-                          color: AppColors.orange,
+                          color: AppColors.orangeText,
                         ),
                       ),
                     ],

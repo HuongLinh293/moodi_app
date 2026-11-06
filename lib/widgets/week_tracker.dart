@@ -212,6 +212,7 @@ class WeekTrackerCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           RichText(
+            textScaler: MediaQuery.textScalerOf(context),
             text: TextSpan(
               style: AppTypography.bodyMedium.copyWith(fontSize: 12),
               children: [

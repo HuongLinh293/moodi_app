@@ -79,6 +79,7 @@ class TodayView extends StatelessWidget {
                     Text(_getFormattedDate(), style: AppTypography.kicker),
                     const SizedBox(height: 6),
                     RichText(
+                      textScaler: MediaQuery.textScalerOf(context),
                       text: TextSpan(
                         style: AppTypography.displayMedium.copyWith(
                           fontSize: 26,
@@ -89,7 +90,7 @@ class TodayView extends StatelessWidget {
                             text: 'cho cảm xúc.',
                             style: TextStyle(
                               fontStyle: FontStyle.italic,
-                              color: AppColors.orange,
+                              color: AppColors.orangeText,
                             ),
                           ),
                         ],
@@ -506,7 +507,7 @@ class TodayView extends StatelessWidget {
                 },
                 iconWidget: const Icon(
                   Icons.gesture_rounded,
-                  color: AppColors.orange,
+                  color: AppColors.orangeText,
                   size: 20,
                 ),
                 iconBgColor: AppColors.orange.withValues(alpha: 0.16),
@@ -523,7 +524,7 @@ class TodayView extends StatelessWidget {
                   size: 20,
                 ),
                 iconBgColor: AppColors.mint.withValues(alpha: 0.18),
-                title: 'Nghỉ 30 giây',
+                title: 'Khoảng nghỉ có hướng dẫn',
                 subtitle: 'Lắng lại một nhịp',
               ),
               const SizedBox(width: 10),
@@ -820,14 +821,14 @@ class TodayView extends StatelessWidget {
         content: GestureDetector(
           onTap: () => FocusScope.of(dialogContext).unfocus(),
           child: TextFormField(
-          initialValue: noteValue,
-          autofocus: true,
-          maxLines: 3,
-          onChanged: (value) => noteValue = value,
-          decoration: const InputDecoration(
-            hintText: 'Điều gì đã xảy ra? (không bắt buộc)',
+            initialValue: noteValue,
+            autofocus: true,
+            maxLines: 3,
+            onChanged: (value) => noteValue = value,
+            decoration: const InputDecoration(
+              hintText: 'Điều gì đã xảy ra? (không bắt buộc)',
+            ),
           ),
-        ),
         ),
         actions: [
           TextButton(

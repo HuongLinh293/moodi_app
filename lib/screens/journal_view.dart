@@ -13,6 +13,7 @@ import '../models/journal_entry.dart';
 import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
 import 'ai_reflection_view.dart';
+import 'journal_entry_editor.dart';
 
 class JournalView extends StatefulWidget {
   final MindraState state;
@@ -26,13 +27,25 @@ class JournalView extends StatefulWidget {
 class _JournalViewState extends State<JournalView> {
   late DateTime _selectedDate;
   late DateTime _displayedMonth;
+  int _seenFocus = 0;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
+    final now = widget.state.journalFocusDate ?? DateTime.now();
+    _seenFocus = widget.state.journalFocusSeq;
     _selectedDate = DateTime(now.year, now.month, now.day);
     _displayedMonth = DateTime(now.year, now.month, 1);
+  }
+
+  @override
+  void didUpdateWidget(covariant JournalView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_seenFocus == widget.state.journalFocusSeq) return;
+    _seenFocus = widget.state.journalFocusSeq;
+    final date = widget.state.journalFocusDate ?? DateTime.now();
+    _selectedDate = DateTime(date.year, date.month, date.day);
+    _displayedMonth = DateTime(date.year, date.month, 1);
   }
 
   bool _isSameDay(DateTime d1, DateTime d2) {
@@ -45,8 +58,11 @@ class _JournalViewState extends State<JournalView> {
 
   bool _isFuture(DateTime d) {
     final now = DateTime.now();
-    return DateTime(d.year, d.month, d.day)
-        .isAfter(DateTime(now.year, now.month, now.day));
+    return DateTime(
+      d.year,
+      d.month,
+      d.day,
+    ).isAfter(DateTime(now.year, now.month, now.day));
   }
 
   bool get _isDisplayingCurrentMonth {
@@ -87,6 +103,20 @@ class _JournalViewState extends State<JournalView> {
     });
   }
 
+  String _triggerLabel(String value) =>
+      const {
+        'work': 'Công việc',
+        'family': 'Gia đình',
+        'friends': 'Bạn bè',
+        'relationship': 'Tình cảm',
+        'self_care': 'Bản thân',
+        'health': 'Sức khỏe',
+        'rest': 'Nghỉ ngơi',
+        'finance': 'Tài chính',
+        'study': 'Học tập',
+      }[value] ??
+      value;
+
   String _formatTimestamp(DateTime dt) {
     return DateFormat('HH:mm').format(dt);
   }
@@ -114,357 +144,30 @@ class _JournalViewState extends State<JournalView> {
   }
 
   // Mở BottomSheet ghi nhận / chỉnh sửa cảm xúc cho ngày được chọn (Emolog style)
-  void _openQuickLogForDate(
+  Future<void> _openQuickLogForDate(
     DateTime targetDate, [
     JournalEntry? existingEntry,
-  ]) {
+  ]) async {
     if (existingEntry == null && _isFuture(targetDate)) return;
-    MindraMotion.of(widget.state.lowStimulationMode).medium();
-    final isEditing = existingEntry != null;
-    String selectedKey = existingEntry?.emotionKey ?? 'calm';
-    int intensity = existingEntry?.intensity ?? 3;
-    final noteController = TextEditingController(
-      text: existingEntry?.situation ?? '',
-    );
-
-    showModalBottomSheet(
+    final saved = await showModalBottomSheet<JournalEntry>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (modalContext, setModalState) {
-            return Container(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
-                top: 20,
-                left: 20,
-                right: 20,
-              ),
-              decoration: const BoxDecoration(
-                color: AppColors.cream,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: SafeArea(
-                top: false,
-                child: GestureDetector(
-                  onTap: () => FocusScope.of(modalContext).unfocus(),
-                  child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 44,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: AppColors.line,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                isEditing
-                                    ? 'SỬA NHẬT KÝ CẢM XÚC'
-                                    : 'GHI NHẬN CẢM XÚC',
-                                style: AppTypography.kicker,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatDateHeader(targetDate),
-                                style: AppTypography.titleLarge.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(modalContext),
-                          icon: const Icon(Icons.close_rounded, size: 24),
-                          color: AppColors.textTertiary,
-                          constraints: const BoxConstraints(
-                            minWidth: 44,
-                            minHeight: 44,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Chọn cảm xúc (Faces)
-                    Text(
-                      'Bạn cảm thấy thế nào vào ngày này?',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 84,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        physics: MindraMotion.of(
-                          widget.state.lowStimulationMode,
-                        ).scrollPhysics,
-                        children: MindraEmotions.primaryKeys.map((key) {
-                          final emo = MindraEmotions.get(key);
-                          final isSelected = selectedKey == key;
-                          return GestureDetector(
-                            onTap: () {
-                              MindraMotion.of(widget.state.lowStimulationMode)
-                                  .selection();
-                              setModalState(() => selectedKey = key);
-                            },
-                            child: AnimatedContainer(
-                              duration: MindraMotion.of(
-                                widget.state.lowStimulationMode,
-                              ).duration,
-                              margin: const EdgeInsets.only(right: 12),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.ink
-                                      : AppColors.line,
-                                  width: isSelected ? 1.8 : 1.0,
-                                ),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: AppColors.ink.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ]
-                                    : null,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  MoodFace(faceType: emo.face, size: 36),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    emo.vi,
-                                    style: AppTypography.caption.copyWith(
-                                      fontWeight: isSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                      color: isSelected
-                                          ? AppColors.ink
-                                          : AppColors.textMuted,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 18),
-                    // Chọn mức độ (1-5)
-                    Row(
-                      children: [
-                        Text('Mức độ: ', style: AppTypography.bodyMedium),
-                        Text(
-                          '$intensity/5',
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Spacer(),
-                        ...List.generate(5, (index) {
-                          final lvl = index + 1;
-                          final isReached = lvl <= intensity;
-                          return GestureDetector(
-                            onTap: () {
-                              MindraMotion.of(widget.state.lowStimulationMode)
-                                  .selection();
-                              setModalState(() => intensity = lvl);
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: SizedBox(
-                              width: 36,
-                              height: 44, // 44pt touch area
-                              child: Center(
-                                child: Container(
-                                  width: 18,
-                                  height: 18,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isReached
-                                        ? AppColors.ink
-                                        : AppColors.line,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-
-                    const SizedBox(height: 14),
-                    // Ghi chú ngắn
-                    TextField(
-                      maxLength: 4000,
-                      controller: noteController,
-                      maxLines: 2,
-                      style: AppTypography.bodyMedium,
-                      decoration: InputDecoration(
-                        hintText: 'Thêm vài dòng ghi chép nhẹ nhàng (không bắt buộc)...',
-                        hintStyle: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textTertiary,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.all(14),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: AppColors.line),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: AppColors.line),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: AppColors.ink,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-                    // Nút lưu / cập nhật
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.ink,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
-                        onPressed: () {
-                          MindraMotion.of(widget.state.lowStimulationMode)
-                              .medium();
-                          late final String savedId;
-                          if (isEditing) {
-                            savedId = existingEntry.id;
-                            final updatedEntry = existingEntry.copyWith(
-                              emotionKey: selectedKey,
-                              intensity: intensity,
-                              situation: noteController.text.trim(),
-                            );
-                            widget.state.updateEntry(updatedEntry);
-                          } else {
-                            final newEntry = JournalEntry(
-                              id: 'entry-${DateTime.now().millisecondsSinceEpoch}',
-                              timestamp: DateTime(
-                                targetDate.year,
-                                targetDate.month,
-                                targetDate.day,
-                                DateTime.now().hour,
-                                DateTime.now().minute,
-                              ),
-                              emotionKey: selectedKey,
-                              intensity: intensity,
-                              situation: noteController.text.trim(),
-                            );
-                            savedId = newEntry.id;
-                            widget.state.addEntry(newEntry);
-                          }
-                          Navigator.pop(modalContext);
-                          setState(() {
-                            _selectedDate = targetDate;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                widget.state.entrySaveMessage(savedId),
-                              ),
-                              backgroundColor: AppColors.ink,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                        child: Text(
-                          isEditing ? 'Lưu thay đổi' : 'Lưu vào nhật ký',
-                          style: AppTypography.titleMedium.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    if (isEditing) ...[
-                      const SizedBox(height: 8),
-                      Center(
-                        child: TextButton.icon(
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.orange,
-                            minimumSize: const Size(44, 44),
-                          ),
-                          icon: const Icon(
-                            Icons.delete_outline_rounded,
-                            size: 18,
-                          ),
-                          label: Text(
-                            'Xóa ghi chép này',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.orange,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(modalContext);
-                            _confirmDeleteEntry(existingEntry);
-                          },
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (_) => JournalEntryEditor(
+        state: widget.state,
+        date: targetDate,
+        entry: existingEntry,
+      ),
+    );
+    if (saved == null || !mounted) return;
+    setState(() => _selectedDate = targetDate);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(widget.state.entrySaveMessage(saved.id))),
     );
   }
 
-  // Hộp thoại xác nhận xóa entry
   void _confirmDeleteEntry(JournalEntry entry) {
     MindraMotion.of(widget.state.lowStimulationMode).light();
     final emo = MindraEmotions.get(entry.emotionKey);
@@ -473,81 +176,87 @@ class _JournalViewState extends State<JournalView> {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (dialogCtx, setDialogState) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Text(
-          'Xóa nhật ký?',
-          style: AppTypography.titleMedium.copyWith(
-            fontWeight: FontWeight.w700,
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
           ),
-        ),
-        content: Text(
-          'Bạn có chắc muốn xóa ghi chép cảm xúc "${emo.vi}" (${_formatTimestamp(entry.timestamp)}) ngày ${_formatDateHeader(entry.timestamp)}?',
-          style: AppTypography.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: deleting ? null : () => Navigator.pop(dialogCtx),
-            child: Text(
-              'Hủy',
-              style: AppTypography.button.copyWith(
-                color: AppColors.textTertiary,
-              ),
+          title: Text(
+            'Xóa nhật ký?',
+            style: AppTypography.titleMedium.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.orange,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.orange.withValues(alpha: 0.6),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            onPressed: deleting
-                ? null
-                : () async {
-              setDialogState(() => deleting = true);
-              try {
-                await widget.state.removeEntry(entry.id);
-              } catch (_) {
-                if (!dialogCtx.mounted) return;
-                setDialogState(() => deleting = false);
-                ScaffoldMessenger.of(dialogCtx).showSnackBar(
-                  const SnackBar(
-                    content: Text('Chưa xóa được ghi chép. Hãy thử lại.'),
-                  ),
-                );
-                return;
-              }
-              if (!mounted || !dialogCtx.mounted) return;
-              Navigator.pop(dialogCtx);
-              setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Đã xóa ghi chép cảm xúc'),
-                  backgroundColor: AppColors.ink,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  duration: const Duration(seconds: 2),
+          content: Text(
+            'Bạn có chắc muốn xóa ghi chép cảm xúc "${emo.vi}" (${_formatTimestamp(entry.timestamp)}) ngày ${_formatDateHeader(entry.timestamp)}?',
+            style: AppTypography.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: deleting ? null : () => Navigator.pop(dialogCtx),
+              child: Text(
+                'Hủy',
+                style: AppTypography.button.copyWith(
+                  color: AppColors.textTertiary,
                 ),
-              );
-            },
-            child: deleting
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Xóa'),
-          ),
-        ],
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.orange,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.orange.withValues(
+                  alpha: 0.6,
+                ),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: deleting
+                  ? null
+                  : () async {
+                      setDialogState(() => deleting = true);
+                      try {
+                        await widget.state.removeEntry(entry.id);
+                      } catch (_) {
+                        if (!dialogCtx.mounted) return;
+                        setDialogState(() => deleting = false);
+                        ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Chưa xóa được ghi chép. Hãy thử lại.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      if (!mounted || !dialogCtx.mounted) return;
+                      Navigator.pop(dialogCtx);
+                      setState(() {});
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Đã xóa ghi chép cảm xúc'),
+                          backgroundColor: AppColors.ink,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+              child: deleting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Xóa'),
+            ),
+          ],
         ),
       ),
     );
@@ -753,7 +462,11 @@ class _JournalViewState extends State<JournalView> {
                                 widget.state.lowStimulationMode,
                               ).duration,
                               margin: const EdgeInsets.symmetric(horizontal: 2),
-                              height: 52,
+                              height:
+                                  52 +
+                                  (MediaQuery.textScalerOf(context).scale(11) -
+                                          11)
+                                      .clamp(0, 36),
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? AppColors.creamDark
@@ -898,7 +611,7 @@ class _JournalViewState extends State<JournalView> {
                     child: Text(
                       'Hôm nay',
                       style: AppTypography.caption.copyWith(
-                        color: AppColors.orange,
+                        color: AppColors.orangeText,
                         fontWeight: FontWeight.w600,
                         fontSize: 10,
                       ),
@@ -930,7 +643,7 @@ class _JournalViewState extends State<JournalView> {
                 onTap: () => _openQuickLogForDate(_selectedDate),
                 behavior: HitTestBehavior.opaque,
                 child: Container(
-                  constraints: const BoxConstraints(minHeight: 36),
+                  constraints: const BoxConstraints(minHeight: 48),
                   alignment: Alignment.centerRight,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1184,6 +897,36 @@ class _JournalViewState extends State<JournalView> {
                                 color: AppColors.textTertiary,
                               ),
                             ),
+                          if (entry.situation.isNotEmpty &&
+                              entry.thought.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Suy nghĩ: ${entry.thought}',
+                                style: AppTypography.bodyMedium.copyWith(
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                            ),
+                          if (entry.response.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Phản ứng: ${entry.response}',
+                                style: AppTypography.bodyMedium.copyWith(
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                            ),
+                          if (entry.trigger != 'other' &&
+                              entry.trigger.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Tác nhân: ${_triggerLabel(entry.trigger)}',
+                                style: AppTypography.caption,
+                              ),
+                            ),
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
@@ -1230,14 +973,12 @@ class _JournalViewState extends State<JournalView> {
                               ),
                             ),
                           ),
-                          if (widget.state.reflectionForEntry(entry.id) != null)
+                          if (widget.state.aiConsent ||
+                              widget.state.reflectionForEntry(entry.id) != null)
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton.icon(
                                 onPressed: () {
-                                  final reflection = widget.state
-                                      .reflectionForEntry(entry.id);
-                                  if (reflection == null) return;
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) => AIReflectionView(
@@ -1256,11 +997,19 @@ class _JournalViewState extends State<JournalView> {
                                   Icons.auto_awesome_outlined,
                                   size: 18,
                                 ),
-                                label: const Text('Xem phản tư'),
+                                label: Text(
+                                  widget.state.reflectionForEntry(entry.id) ==
+                                          null
+                                      ? 'Tạo gợi ý phản tư'
+                                      : 'Xem phản tư',
+                                ),
                               ),
                             ),
-                          if (entry.exerciseDone &&
-                              entry.exerciseId != null) ...[
+                          if ((entry.exerciseDone &&
+                                  entry.exerciseId != null) ||
+                              widget.state.practiceRecords.any(
+                                (r) => r.sourceEntryId == entry.id,
+                              )) ...[
                             const SizedBox(height: 10),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -1320,6 +1069,7 @@ class _JournalViewState extends State<JournalView> {
             children: [
               Expanded(
                 child: RichText(
+                  textScaler: MediaQuery.textScalerOf(context),
                   text: TextSpan(
                     style: AppTypography.displayMedium.copyWith(fontSize: 22),
                     children: [
@@ -1327,7 +1077,7 @@ class _JournalViewState extends State<JournalView> {
                         text: monthName.toUpperCase(),
                         style: TextStyle(
                           fontStyle: FontStyle.italic,
-                          color: AppColors.orange,
+                          color: AppColors.orangeText,
                         ),
                       ),
                       TextSpan(

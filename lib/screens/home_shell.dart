@@ -10,8 +10,10 @@ import '../core/theme/shadows.dart';
 import '../core/theme/typography.dart';
 import '../models/emotion.dart';
 import '../state/mindra_state.dart';
+import '../widgets/personal_data_notice.dart';
 import 'today_view.dart';
 import 'checkin_view.dart';
+import 'ai_reflection_view.dart';
 import 'practice_view.dart';
 import 'personal_space_view.dart';
 import 'explore_view.dart';
@@ -27,10 +29,12 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  final Set<int> _visitedTabs = {0};
   @override
   Widget build(BuildContext context) {
     final state = context.watch<MindraState>();
     final currentTab = state.currentTab;
+    _visitedTabs.add(currentTab);
 
     final motion = MindraMotion.of(state.lowStimulationMode);
     return Scaffold(
@@ -41,14 +45,24 @@ class _HomeShellState extends State<HomeShell> {
         preferredSize: Size.fromHeight(80 + MediaQuery.paddingOf(context).top),
         child: _buildFlexibleAppBar(context, state, currentTab, motion),
       ),
-      body: AnimatedSwitcher(
-        duration: motion.mediumDuration,
-        transitionBuilder: (child, animation) =>
-            FadeTransition(opacity: animation, child: child),
-        child: KeyedSubtree(
-          key: ValueKey<int>(currentTab),
-          child: _buildView(state, currentTab),
-        ),
+      body: Column(
+        children: [
+          if (currentTab != 2) PersonalDataNotice(state: state),
+          Expanded(
+            child: IndexedStack(
+              index: currentTab,
+              children: List.generate(
+                4,
+                (index) => TickerMode(
+                  enabled: index == currentTab,
+                  child: _visitedTabs.contains(index)
+                      ? _buildView(state, index)
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: _buildBottomNav(context, state, currentTab, motion),
     );
@@ -70,7 +84,9 @@ class _HomeShellState extends State<HomeShell> {
             key: ValueKey<int>(currentTab),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final isCompact = constraints.maxWidth < 380;
+                final isCompact =
+                    constraints.maxWidth < 380 ||
+                    MediaQuery.textScalerOf(context).scale(14) > 20;
                 return SizedBox(
                   height: 64,
                   child: Row(
@@ -126,10 +142,22 @@ class _HomeShellState extends State<HomeShell> {
     int currentTab,
     bool isCompact,
   ) {
+    if (isCompact && currentTab > 0) {
+      final item = switch (currentTab) {
+        1 => (Icons.spa_outlined, 'Góc riêng'),
+        2 => (Icons.forum_outlined, 'Cộng đồng'),
+        _ => (Icons.explore_outlined, 'Khám phá'),
+      };
+      return Semantics(
+        label: item.$2,
+        child: Icon(item.$1, color: AppColors.ink),
+      );
+    }
     switch (currentTab) {
       case 0:
         // Trang Hôm nay: Wordmark thương hiệu
         return RichText(
+          textScaler: MediaQuery.textScalerOf(context),
           text: TextSpan(
             style: AppTypography.headlineLarge.copyWith(
               fontSize: isCompact ? 19 : 23,
@@ -141,7 +169,7 @@ class _HomeShellState extends State<HomeShell> {
               TextSpan(
                 text: 'oo',
                 style: TextStyle(
-                  color: AppColors.orange,
+                  color: AppColors.orangeText,
                   fontStyle: FontStyle.italic,
                 ),
               ),
@@ -198,7 +226,7 @@ class _HomeShellState extends State<HomeShell> {
                 child: Icon(
                   Icons.forum_outlined,
                   size: 18,
-                  color: AppColors.orange,
+                  color: AppColors.orangeText,
                 ),
               ),
             ),
@@ -336,6 +364,7 @@ class _HomeShellState extends State<HomeShell> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (modalCtx) {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
@@ -348,248 +377,254 @@ class _HomeShellState extends State<HomeShell> {
             child: ListenableBuilder(
               listenable: state,
               builder: (_, _) => Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.line,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.ink,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          state.userInitial,
+                          style: AppTypography.headlineMedium.copyWith(
+                            color: AppColors.yellow,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              state.userName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.titleLarge.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              state.userEmail.isEmpty
+                                  ? 'Tài khoản khách'
+                                  : state.userEmail,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.line,
-                      borderRadius: BorderRadius.circular(10),
+                      color: AppColors.creamDark,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: AppShadows.card,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Column(
+                          children: [
+                            Text(
+                              '${state.totalCheckins}',
+                              style: AppTypography.titleLarge.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text('Lần check-in', style: AppTypography.caption),
+                          ],
+                        ),
+                        Container(height: 28, width: 1, color: AppColors.line),
+                        Column(
+                          children: [
+                            Text(
+                              '${state.consecutiveDays}',
+                              style: AppTypography.titleLarge.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Ngày liên tiếp',
+                              style: AppTypography.caption,
+                            ),
+                          ],
+                        ),
+                        Container(height: 28, width: 1, color: AppColors.line),
+                        Column(
+                          children: [
+                            Text(
+                              '${state.uniqueCheckinDays}',
+                              style: AppTypography.titleLarge.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.mint,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text('Ngày ghi nhận', style: AppTypography.caption),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.ink,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        state.userInitial,
-                        style: AppTypography.headlineMedium.copyWith(
-                          color: AppColors.yellow,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            state.userName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.titleLarge.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            state.userEmail.isEmpty
-                                ? 'Tài khoản khách'
-                                : state.userEmail,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.creamDark,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: AppShadows.card,
+                  const SizedBox(height: 10),
+                  Text(
+                    'Tuần này ${state.checkinDaysThisWeek}/7 ngày · ${state.exercisesCompleted} bài tập',
+                    style: AppTypography.caption,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      Column(
-                        children: [
-                          Text(
-                            '${state.totalCheckins}',
-                            style: AppTypography.titleLarge.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                  const SizedBox(height: 18),
+                  Material(
+                    color: Colors.transparent,
+                    child: Column(
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.edit_outlined,
+                            color: AppColors.ink,
                           ),
-                          const SizedBox(height: 2),
-                          Text('Lần check-in', style: AppTypography.caption),
-                        ],
-                      ),
-                      Container(height: 28, width: 1, color: AppColors.line),
-                      Column(
-                        children: [
-                          Text(
-                            '${state.consecutiveDays}',
-                            style: AppTypography.titleLarge.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                          title: Text(
+                            'Sửa tên hiển thị',
+                            style: AppTypography.bodyMedium,
                           ),
-                          const SizedBox(height: 2),
-                          Text('Ngày liên tiếp', style: AppTypography.caption),
-                        ],
-                      ),
-                      Container(height: 28, width: 1, color: AppColors.line),
-                      Column(
-                        children: [
-                          Text(
-                            '${state.uniqueCheckinDays}',
-                            style: AppTypography.titleLarge.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.mint,
-                            ),
+                          trailing: const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
                           ),
-                          const SizedBox(height: 2),
-                          Text('Ngày ghi nhận', style: AppTypography.caption),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Tuần này ${state.checkinDaysThisWeek}/7 ngày · ${state.exercisesCompleted} bài tập',
-                  style: AppTypography.caption,
-                ),
-                const SizedBox(height: 18),
-                Material(
-                  color: Colors.transparent,
-                  child: Column(
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.edit_outlined,
-                          color: AppColors.ink,
+                          onTap: () => _editDisplayName(context, state),
                         ),
-                        title: Text(
-                          'Sửa tên hiển thị',
-                          style: AppTypography.bodyMedium,
-                        ),
-                        trailing: const Icon(
-                          Icons.chevron_right_rounded,
-                          size: 20,
-                        ),
-                        onTap: () => _editDisplayName(context, state),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.settings_rounded,
-                          color: AppColors.ink,
-                        ),
-                        title: Text(
-                          'Cài đặt & Bảo mật',
-                          style: AppTypography.bodyMedium,
-                        ),
-                        trailing: const Icon(
-                          Icons.chevron_right_rounded,
-                          size: 20,
-                        ),
-                        onTap: () {
-                          Navigator.pop(modalCtx);
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (pageCtx) => Scaffold(
-                                backgroundColor: AppColors.paper,
-                                appBar: AppBar(
+                        const Divider(height: 1),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.settings_rounded,
+                            color: AppColors.ink,
+                          ),
+                          title: Text(
+                            'Cài đặt & Bảo mật',
+                            style: AppTypography.bodyMedium,
+                          ),
+                          trailing: const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                          ),
+                          onTap: () {
+                            Navigator.pop(modalCtx);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (pageCtx) => Scaffold(
                                   backgroundColor: AppColors.paper,
-                                  elevation: 0,
-                                  scrolledUnderElevation: 0,
-                                  leading: IconButton(
-                                    icon: const Icon(
-                                      Icons.arrow_back_rounded,
-                                      color: AppColors.ink,
+                                  appBar: AppBar(
+                                    backgroundColor: AppColors.paper,
+                                    elevation: 0,
+                                    scrolledUnderElevation: 0,
+                                    leading: IconButton(
+                                      icon: const Icon(
+                                        Icons.arrow_back_rounded,
+                                        color: AppColors.ink,
+                                      ),
+                                      onPressed: () => Navigator.pop(pageCtx),
                                     ),
-                                    onPressed: () => Navigator.pop(pageCtx),
-                                  ),
-                                  title: Text(
-                                    'Cài đặt & Riêng tư',
-                                    style: AppTypography.titleMedium.copyWith(
-                                      fontWeight: FontWeight.w700,
+                                    title: Text(
+                                      'Cài đặt & Riêng tư',
+                                      style: AppTypography.titleMedium.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
+                                    centerTitle: false,
                                   ),
-                                  centerTitle: false,
+                                  body: SettingsView(state: state),
                                 ),
-                                body: SettingsView(state: state),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.info_outline_rounded,
-                          color: AppColors.ink,
+                            );
+                          },
                         ),
-                        title: Text(
-                          'Về Moodi',
-                          style: AppTypography.bodyMedium,
-                        ),
-                        trailing: Text('v1.0.0', style: AppTypography.caption),
-                        onTap: () {
-                          Navigator.pop(modalCtx);
-                          showAboutDialog(
-                            context: context,
-                            applicationName: 'Moodi',
-                            applicationVersion: '1.0.0',
-                            children: [
-                              Text(
-                                'Một khoảng nhỏ để gọi tên cảm xúc, nhìn lại và chọn cách phản hồi. Moodi là công cụ tự phản tư, không chẩn đoán và không thay thế hỗ trợ chuyên môn.',
-                                style: AppTypography.bodySmall,
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          Icons.logout_rounded,
-                          color: Colors.red.shade700,
-                        ),
-                        title: Text(
-                          'Đăng xuất',
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: Colors.red.shade700,
-                            fontWeight: FontWeight.w600,
+                        const Divider(height: 1),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(
+                            Icons.info_outline_rounded,
+                            color: AppColors.ink,
                           ),
+                          title: Text(
+                            'Về Moodi',
+                            style: AppTypography.bodyMedium,
+                          ),
+                          trailing: Text(
+                            'v1.0.0',
+                            style: AppTypography.caption,
+                          ),
+                          onTap: () {
+                            Navigator.pop(modalCtx);
+                            showAboutDialog(
+                              context: context,
+                              applicationName: 'Moodi',
+                              applicationVersion: '1.0.0',
+                              children: [
+                                Text(
+                                  'Một khoảng nhỏ để gọi tên cảm xúc, nhìn lại và chọn cách phản hồi. Moodi là công cụ tự phản tư, không chẩn đoán và không thay thế hỗ trợ chuyên môn.',
+                                  style: AppTypography.bodySmall,
+                                ),
+                              ],
+                            );
+                          },
                         ),
-                        trailing: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 20,
-                          color: Colors.red.shade300,
+                        const Divider(height: 1),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            Icons.logout_rounded,
+                            color: Colors.red.shade700,
+                          ),
+                          title: Text(
+                            'Đăng xuất',
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          trailing: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: Colors.red.shade300,
+                          ),
+                          onTap: () {
+                            Navigator.pop(modalCtx);
+                            _showLogoutDialog(context, state);
+                          },
                         ),
-                        onTap: () {
-                          Navigator.pop(modalCtx);
-                          _showLogoutDialog(context, state);
-                        },
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                ],
+              ),
             ),
           ),
         );
@@ -651,9 +686,19 @@ class _HomeShellState extends State<HomeShell> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              unawaited(state.logout());
+              try {
+                await state.logout();
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Chưa đăng xuất được. Hãy thử lại.'),
+                    ),
+                  );
+                }
+              }
             },
             child: Text(state.isGuest ? 'Vẫn đăng xuất' : 'Đăng xuất'),
           ),
@@ -666,12 +711,12 @@ class _HomeShellState extends State<HomeShell> {
     BuildContext context,
     MindraState state,
   ) async {
-    final prevCount = state.entries.length;
-    var openedJournal = false;
     MindraMotion.of(state.lowStimulationMode).light();
-    await showModalBottomSheet<void>(
+    final result = await showModalBottomSheet<CheckinResult>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (modalCtx) {
         return Padding(
@@ -710,12 +755,13 @@ class _HomeShellState extends State<HomeShell> {
                           ),
                         ),
                         IconButton(
+                          tooltip: 'Đóng check-in',
                           icon: const Icon(
                             Icons.close_rounded,
                             size: 22,
                             color: AppColors.ink,
                           ),
-                          onPressed: () => Navigator.pop(modalCtx),
+                          onPressed: () => Navigator.maybePop(modalCtx),
                         ),
                       ],
                     ),
@@ -725,11 +771,8 @@ class _HomeShellState extends State<HomeShell> {
                     child: CheckinView(
                       state: state,
                       onClose: () => Navigator.pop(modalCtx),
-                      onOpenJournal: () {
-                        openedJournal = true;
-                        Navigator.pop(modalCtx);
-                        state.openJournal();
-                      },
+                      onOpenJournal: state.openJournal,
+                      onSaved: (result) => Navigator.pop(modalCtx, result),
                     ),
                   ),
                 ],
@@ -740,11 +783,20 @@ class _HomeShellState extends State<HomeShell> {
       },
     );
 
-    if (!context.mounted) return;
-    // Skip when the user moved on: AI reflection pushed on top, or they asked
-    // for the journal (CheckinView's snackbar still offers planting there).
-    final isOnTop = ModalRoute.of(context)?.isCurrent ?? true;
-    if (state.entries.length > prevCount && isOnTop && !openedJournal) {
+    if (!context.mounted || result == null) return;
+    if (result.showReflection) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AIReflectionView(
+            entry: result.entry,
+            state: state,
+            onOpenJournal: () => state.openJournal(entryId: result.entry.id),
+          ),
+        ),
+      );
+    } else if (result.openJournal) {
+      state.openJournal();
+    } else {
       _showPlantingCelebration(context, state);
     }
   }
@@ -793,7 +845,7 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Đã lưu check-in',
+                  'Đã ghi nhận check-in',
                   style: AppTypography.titleLarge.copyWith(
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
@@ -895,6 +947,7 @@ class _HomeShellState extends State<HomeShell> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (modalCtx) {
         return PauseModeSheet(
@@ -981,7 +1034,7 @@ class _HomeShellState extends State<HomeShell> {
     MindraMotion motion,
   ) {
     final textScale = MediaQuery.textScalerOf(context).scale(9) / 9;
-    final navContentHeight = textScale > 1 ? 52 + 16 * (textScale - 1) : 52.0;
+    final navContentHeight = textScale > 1 ? 64 + 36 * (textScale - 1) : 56.0;
     final items = [
       (icon: CupertinoIcons.house, label: 'Hôm nay'),
       (icon: Icons.spa_outlined, label: 'Góc riêng'),
@@ -1031,36 +1084,33 @@ class _HomeShellState extends State<HomeShell> {
                               shadows: isActive
                                   ? const [
                                       Shadow(
-                                        color: AppColors.orange,
+                                        color: AppColors.orangeText,
                                         offset: Offset(0.35, 0),
                                       ),
                                       Shadow(
-                                        color: AppColors.orange,
+                                        color: AppColors.orangeText,
                                         offset: Offset(-0.35, 0),
                                       ),
                                     ]
                                   : null,
                               color: isActive
-                                  ? AppColors.orange
+                                  ? AppColors.orangeText
                                   : AppColors.textMuted,
                             ),
                             const SizedBox(height: 3),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                item.label,
-                                maxLines: 1,
-                                textAlign: TextAlign.center,
-                                style: AppTypography.kicker.copyWith(
-                                  fontSize: 11,
-                                  letterSpacing: 0,
-                                  color: isActive
-                                      ? AppColors.orange
-                                      : AppColors.textMuted,
-                                  fontWeight: isActive
-                                      ? FontWeight.w800
-                                      : FontWeight.w400,
-                                ),
+                            Text(
+                              item.label,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.kicker.copyWith(
+                                fontSize: 11,
+                                letterSpacing: 0,
+                                color: isActive
+                                    ? AppColors.orangeText
+                                    : AppColors.textMuted,
+                                fontWeight: isActive
+                                    ? FontWeight.w800
+                                    : FontWeight.w400,
                               ),
                             ),
                           ],

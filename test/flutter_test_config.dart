@@ -1,0 +1,11 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+Future<void> testExecutable(FutureOr<void> Function() testMain) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  // Every test starts with an isolated keychain, never the developer's session.
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  await testMain();
+}

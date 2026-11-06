@@ -1,3 +1,5 @@
+import '../core/polling_stream.dart';
+
 import 'package:flutter/foundation.dart';
 
 import '../core/http_client.dart';
@@ -125,16 +127,7 @@ class JournalRepository {
   /// Note: REST APIs don't support real-time streaming like Firestore.
   /// This implementation returns a stream using periodic polling.
   Stream<List<JournalEntry>> watchEntries({String? userId}) {
-    const pollInterval = Duration(seconds: 5);
-
-    return Stream.periodic(pollInterval, (_) async {
-      try {
-        return await fetchEntries(userId: userId);
-      } catch (e) {
-        debugPrint('JournalRepository: Error watching entries: $e');
-        rethrow;
-      }
-    }).asyncExpand((future) => future.asStream());
+    return pollingStream(() => fetchEntries(userId: userId));
   }
 
   /// Fetch a single entry by ID

@@ -7,19 +7,33 @@ import '../models/emotion.dart';
 import '../models/journal_entry.dart';
 import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
+import '../widgets/unsaved_changes_guard.dart';
 import 'ai_reflection_view.dart';
 import 'paper_release_sheet.dart';
+
+class CheckinResult {
+  const CheckinResult(
+    this.entry, {
+    this.showReflection = false,
+    this.openJournal = false,
+  });
+  final JournalEntry entry;
+  final bool showReflection;
+  final bool openJournal;
+}
 
 class CheckinView extends StatefulWidget {
   final MindraState state;
   final VoidCallback onOpenJournal;
   final VoidCallback? onClose;
+  final ValueChanged<CheckinResult>? onSaved;
 
   const CheckinView({
     super.key,
     required this.state,
     required this.onOpenJournal,
     this.onClose,
+    this.onSaved,
   });
 
   @override
@@ -58,7 +72,25 @@ class _CheckinViewState extends State<CheckinView> {
   void initState() {
     super.initState();
     _intensity = widget.state.currentIntensity;
+    for (final controller in [
+      _situationController,
+      _thoughtController,
+      _responseController,
+    ]) {
+      controller.addListener(_draftChanged);
+    }
   }
+
+  void _draftChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _dirty =>
+      !_isSaving &&
+      (_situationController.text.isNotEmpty ||
+          _thoughtController.text.isNotEmpty ||
+          _responseController.text.isNotEmpty ||
+          _selectedTriggerId != null);
 
   @override
   void dispose() {
@@ -66,6 +98,37 @@ class _CheckinViewState extends State<CheckinView> {
     _thoughtController.dispose();
     _responseController.dispose();
     super.dispose();
+  }
+
+  Future<void> _enableReflection() async {
+    final consent = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dùng gợi ý phản tư?'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Tình huống và suy nghĩ trong ghi chép này sẽ được gửi tới máy chủ Moodi và có thể chuyển tới Google Gemini để tạo gợi ý. Đây không phải chẩn đoán. Bạn có thể chỉ lưu nhật ký và thay đổi lựa chọn trong Cài đặt bất cứ lúc nào.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Chỉ lưu nhật ký'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Đồng ý dùng gợi ý'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (consent == true) {
+      widget.state.setAiConsent(true);
+      await _handleSave(triggerAIReflection: true);
+    } else if (consent == false) {
+      await _handleSave();
+    }
   }
 
   Future<void> _handleSave({
@@ -96,17 +159,28 @@ class _CheckinViewState extends State<CheckinView> {
     );
     if (!mounted) return;
 
+    if (widget.onSaved != null) {
+      widget.onSaved!(
+        CheckinResult(
+          entry,
+          showReflection: triggerAIReflection && widget.state.aiConsent,
+          openJournal: navigateToJournal,
+        ),
+      );
+      return;
+    }
+
     if (triggerAIReflection && widget.state.aiConsent) {
+      final navigator = Navigator.of(context);
       if (widget.onClose != null) {
         widget.onClose!();
       }
-      Navigator.push(
-        context,
+      navigator.push(
         MaterialPageRoute(
           builder: (_) => AIReflectionView(
             entry: entry,
             state: widget.state,
-            onOpenJournal: widget.onOpenJournal,
+            onOpenJournal: widget.state.openJournal,
           ),
         ),
       );
@@ -147,9 +221,12 @@ class _CheckinViewState extends State<CheckinView> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.state,
-      builder: (context, _) => _buildCheckin(context),
+    return UnsavedChangesGuard(
+      dirty: _dirty,
+      child: ListenableBuilder(
+        listenable: widget.state,
+        builder: (context, _) => _buildCheckin(context),
+      ),
     );
   }
 
@@ -373,29 +450,34 @@ class _CheckinViewState extends State<CheckinView> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('MỨC ĐỘ CẢM NHẬN', style: AppTypography.kicker),
+                Expanded(
+                  child: Text('MỨC ĐỘ CẢM NHẬN', style: AppTypography.kicker),
+                ),
                 Text(
                   _getIntensityLabel(_intensity),
                   style: AppTypography.caption.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppColors.orange,
+                    color: AppColors.orangeText,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
               decoration: BoxDecoration(
                 color: AppColors.creamDark,
                 borderRadius: BorderRadius.circular(18),
               ),
+              // 5 ô chia đều một hàng: không thừa khoảng trống, không rớt dòng.
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(5, (index) {
                   final level = index + 1;
                   final isSelected = _intensity == level;
-                  return Semantics(
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Semantics(
                     button: true,
                     selected: isSelected,
                     label:
@@ -408,7 +490,6 @@ class _CheckinViewState extends State<CheckinView> {
                       child: AnimatedContainer(
                         duration: MindraMotion.of(state.lowStimulationMode)
                             .duration,
-                        width: 48,
                         height: 48,
                         decoration: BoxDecoration(
                           color: isSelected ? AppColors.ink : AppColors.cream,
@@ -420,16 +501,21 @@ class _CheckinViewState extends State<CheckinView> {
                           ),
                         ),
                         alignment: Alignment.center,
-                        child: Text(
-                          '$level',
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: isSelected
-                                ? AppColors.yellow
-                                : AppColors.ink,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            '$level',
+                            style: AppTypography.titleMedium.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: isSelected
+                                  ? AppColors.yellow
+                                  : AppColors.ink,
+                            ),
                           ),
                         ),
                       ),
+                    ),
+                  ),
                     ),
                   );
                 }),
@@ -500,7 +586,7 @@ class _CheckinViewState extends State<CheckinView> {
                       },
                       style: TextButton.styleFrom(
                         backgroundColor: AppColors.orange,
-                        foregroundColor: Colors.white,
+                        foregroundColor: AppColors.ink,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 8,
@@ -512,7 +598,7 @@ class _CheckinViewState extends State<CheckinView> {
                       child: Text(
                         'Vò giấy ➔',
                         style: AppTypography.caption.copyWith(
-                          color: Colors.white,
+                          color: AppColors.ink,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -722,12 +808,14 @@ class _CheckinViewState extends State<CheckinView> {
                     children: [
                       const Text('✨', style: TextStyle(fontSize: 18)),
                       const SizedBox(width: 8),
-                      Text(
-                        _isSaving ? 'Đang lưu...' : 'Lưu & Xem gợi ý phản tư',
-                        style: AppTypography.button.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                      Flexible(
+                        child: Text(
+                          _isSaving ? 'Đang lưu...' : 'Lưu & Xem gợi ý phản tư',
+                          style: AppTypography.button.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -774,12 +862,14 @@ class _CheckinViewState extends State<CheckinView> {
                         color: AppColors.yellow,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        _isSaving ? 'Đang lưu...' : 'Lưu check-in đầy đủ',
-                        style: AppTypography.button.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                      Flexible(
+                        child: Text(
+                          _isSaving ? 'Đang lưu...' : 'Lưu check-in đầy đủ',
+                          style: AppTypography.button.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -802,6 +892,12 @@ class _CheckinViewState extends State<CheckinView> {
                 ),
               ),
             ],
+            if (_isFullCheckin && !widget.state.aiConsent)
+              TextButton.icon(
+                onPressed: canSave ? _enableReflection : null,
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('Tìm hiểu và bật gợi ý phản tư'),
+              ),
             const SizedBox(height: 20),
           ],
         ),
@@ -823,9 +919,9 @@ class _CheckinViewState extends State<CheckinView> {
           builder: (context, value, _) {
             final hasText = value.text.isNotEmpty;
             return TextField(
-              maxLength: 4000,
               key: ValueKey<String>(label),
               controller: controller,
+              maxLength: 4000,
               minLines: 2,
               maxLines: 5,
               keyboardType: TextInputType.multiline,

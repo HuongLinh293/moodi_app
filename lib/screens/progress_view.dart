@@ -70,6 +70,7 @@ class ProgressView extends StatelessWidget {
           Text('TIẾN TRÌNH CỦA BẠN', style: AppTypography.kicker),
           const SizedBox(height: 8),
           RichText(
+            textScaler: MediaQuery.textScalerOf(context),
             text: TextSpan(
               style: AppTypography.displayMedium.copyWith(fontSize: 34),
               children: [
@@ -78,7 +79,7 @@ class ProgressView extends StatelessWidget {
                   text: 'hiểu mình hơn.',
                   style: TextStyle(
                     fontStyle: FontStyle.italic,
-                    color: AppColors.orange,
+                    color: AppColors.orangeText,
                   ),
                 ),
               ],
@@ -153,6 +154,37 @@ class ProgressView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
+          ],
+          if (state.practiceRecords.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('LỊCH SỬ THỰC HÀNH', style: AppTypography.kicker),
+            const SizedBox(height: 8),
+            for (final record in state.practiceRecords.take(10))
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.self_improvement_outlined),
+                  title: Text(
+                    const {
+                          'response-pause': 'Khoảng nghỉ có hướng dẫn',
+                          'grounding': 'Neo về hiện tại',
+                          'breath-478': 'Thở 4-7-8',
+                          'breath-box': 'Thở hộp',
+                          'breath-belly': 'Thở bụng',
+                          'reframe': 'Nhìn lại suy nghĩ',
+                          'compassion': 'Lời dịu dàng',
+                          'body-scan': 'Quét và thả lỏng',
+                        }[record.exerciseId] ??
+                        'Bài thực hành',
+                  ),
+                  subtitle: Text(
+                    '${record.timestamp.day}/${record.timestamp.month} · ${record.timestamp.hour.toString().padLeft(2, '0')}:${record.timestamp.minute.toString().padLeft(2, '0')}\n${record.note.isEmpty ? 'Đã hoàn thành' : record.note}${record.usefulnessRating == null ? '' : '\nHữu ích ${record.usefulnessRating}/5'}${record.easeRating == null ? '' : ' · Dễ thực hiện ${record.easeRating}/5'}${record.repeatPreference == null ? '' : '\nDùng lại: ${record.repeatPreference == 'yes'
+                              ? 'Có'
+                              : record.repeatPreference == 'no'
+                              ? 'Không'
+                              : 'Chưa chắc'}'}${record.afterEmotionKey == null ? '' : '\nSau bài tập: ${MindraEmotions.get(record.afterEmotionKey).vi}${record.afterIntensity == null ? '' : ' ${record.afterIntensity}/5'}'}',
+                  ),
+                ),
+              ),
           ],
         ],
       ),
@@ -419,7 +451,7 @@ class ProgressView extends StatelessWidget {
   Widget _buildWeeklyMetricsGrid(EmotionInfo? dominantEmo) {
     final daysThisWeek = state.checkinDaysThisWeek;
     final avgIntensity = state.averageIntensityThisWeek;
-    final exercisesDone = state.exercisesCompleted;
+    final exercisesDone = state.practicesThisWeek;
 
     return Column(
       children: [
@@ -511,10 +543,8 @@ class ProgressView extends StatelessWidget {
                   const SizedBox(width: 6),
                 ],
                 Expanded(
-                  child: RichText(
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    text: TextSpan(
+                  child: Text.rich(
+                    TextSpan(
                       text: value,
                       style: AppTypography.displayMedium.copyWith(
                         fontSize: 22,
@@ -540,8 +570,6 @@ class ProgressView extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: AppTypography.kicker.copyWith(
                 fontSize: 12,
                 color: AppColors.textMuted,
@@ -1106,149 +1134,151 @@ class _WeeklyReviewSheetState extends State<_WeeklyReviewSheet> {
         child: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
           child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            22,
-            16,
-            22,
-            MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.line,
-                    borderRadius: BorderRadius.circular(10),
+            padding: EdgeInsets.fromLTRB(
+              22,
+              16,
+              22,
+              MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.line,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // Header
-              Row(
-                children: [
-                  if (_step > 0)
-                    GestureDetector(
-                      onTap: _back,
-                      behavior: HitTestBehavior.opaque,
-                      child: const Padding(
-                        padding: EdgeInsets.only(right: 10),
-                        child: Icon(
-                          Icons.arrow_back_rounded,
-                          size: 20,
-                          color: AppColors.textMuted,
+                // Header
+                Row(
+                  children: [
+                    if (_step > 0)
+                      GestureDetector(
+                        onTap: _back,
+                        behavior: HitTestBehavior.opaque,
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 10),
+                          child: Icon(
+                            Icons.arrow_back_rounded,
+                            size: 20,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ),
+                    Text(
+                      'NHÌN LẠI TUẦN — ${_step + 1}/3',
+                      style: AppTypography.kicker,
                     ),
-                  Text(
-                    'NHÌN LẠI TUẦN — ${_step + 1}/3',
-                    style: AppTypography.kicker,
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    behavior: HitTestBehavior.opaque,
-                    child: const Icon(
-                      Icons.close_rounded,
-                      size: 22,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Step indicator
-              Row(
-                children: List.generate(3, (i) {
-                  return Expanded(
-                    child: AnimatedContainer(
-                      duration: MindraMotion(widget.reducedMotion).duration,
-                      height: 4,
-                      margin: const EdgeInsets.only(right: 6),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        color: i <= _step ? AppColors.ink : AppColors.lineLight,
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      behavior: HitTestBehavior.opaque,
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 22,
+                        color: AppColors.textMuted,
                       ),
                     ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 28),
-
-              // Prompt
-              Text(
-                _prompts[_step],
-                style: AppTypography.titleLarge.copyWith(
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
+                  ],
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
-              // Text field
-              Expanded(
-                child: TextField(
-                  controller: _currentController,
-                  maxLines: null,
-                  expands: true,
-                  autofocus: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  style: AppTypography.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: _hints[_step],
-                    hintStyle: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textTertiary,
+                // Step indicator
+                Row(
+                  children: List.generate(3, (i) {
+                    return Expanded(
+                      child: AnimatedContainer(
+                        duration: MindraMotion(widget.reducedMotion).duration,
+                        height: 4,
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          color: i <= _step
+                              ? AppColors.ink
+                              : AppColors.lineLight,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 28),
+
+                // Prompt
+                Text(
+                  _prompts[_step],
+                  style: AppTypography.titleLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Text field
+                Expanded(
+                  child: TextField(
+                    controller: _currentController,
+                    maxLines: null,
+                    expands: true,
+                    autofocus: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    style: AppTypography.bodyMedium,
+                    decoration: InputDecoration(
+                      hintText: _hints[_step],
+                      hintStyle: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: AppColors.line),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: AppColors.line),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: AppColors.ink.withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                      filled: true,
+                      fillColor: AppColors.cream,
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: AppColors.line),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: AppColors.line),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: AppColors.ink.withValues(alpha: 0.4),
-                        width: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Action button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.ink,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    contentPadding: const EdgeInsets.all(16),
-                    filled: true,
-                    fillColor: AppColors.cream,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Action button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.ink,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    onPressed: _next,
+                    child: Text(
+                      isLast ? 'Lưu nhìn lại' : 'Tiếp theo',
+                      style: AppTypography.button,
                     ),
                   ),
-                  onPressed: _next,
-                  child: Text(
-                    isLast ? 'Lưu nhìn lại' : 'Tiếp theo',
-                    style: AppTypography.button,
-                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );

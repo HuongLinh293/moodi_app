@@ -44,7 +44,7 @@ class EntrySyncNotice extends StatelessWidget {
               ),
               if (pending > 0 || failed > 0)
                 const Text(
-                  'Chưa xác nhận lưu trên tài khoản. Giữ ứng dụng mở và kiểm tra kết nối.',
+                  'Chưa xác nhận đồng bộ tài khoản. Bản đã lưu trên máy sẽ được gửi lại khi kết nối trở lại.',
                   style: TextStyle(color: AppColors.textSecondary, height: 1.5),
                 ),
               if (failed > 0 || (session > 0 && state.currentUserId != null))

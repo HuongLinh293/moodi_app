@@ -8,6 +8,9 @@ import '../core/theme/typography.dart';
 import '../models/emotion.dart';
 import '../state/mindra_state.dart';
 import '../widgets/mood_face.dart';
+import '../widgets/scrollable_panel.dart';
+import '../widgets/unsaved_changes_guard.dart';
+import '../models/journal_entry.dart';
 
 enum PracticeKind { breath, steps, write }
 
@@ -66,11 +69,13 @@ enum _SessionPhase { intro, running, complete, afterCheckin }
 class PracticeSessionSheet extends StatefulWidget {
   final MindraState state;
   final PracticeSessionConfig config;
+  final JournalEntry? sourceEntry;
 
   const PracticeSessionSheet({
     super.key,
     required this.state,
     required this.config,
+    this.sourceEntry,
   });
 
   @override
@@ -82,11 +87,21 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
   int _stepIndex = 0;
   final Map<int, TextEditingController> _writers = {};
   String? _afterEmotionKey;
-  int _afterIntensity = 3;
+  int? _afterIntensity;
   int? _usefulnessRating;
   int? _easeRating;
   String? _repeatPreference;
   bool _saved = false;
+  String? _recordId;
+  JournalEntry? _sourceEntry;
+  String? _beforeEmotionKey;
+  int? _beforeIntensity;
+  bool _showBefore = false;
+  @override
+  void initState() {
+    super.initState();
+    _sourceEntry = widget.sourceEntry ?? widget.state.todayEntry;
+  }
 
   MindraState get _state => widget.state;
   PracticeSessionConfig get _config => widget.config;
@@ -120,7 +135,13 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
   }
 
   TextEditingController _writerFor(int index) {
-    return _writers.putIfAbsent(index, TextEditingController.new);
+    return _writers.putIfAbsent(
+      index,
+      () => TextEditingController()
+        ..addListener(() {
+          if (mounted) setState(() {});
+        }),
+    );
   }
 
   String _collectedNote() {
@@ -144,7 +165,7 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
 
   void _exit() {
     MindraMotion.of(_state.lowStimulationMode).selection();
-    Navigator.pop(context);
+    Navigator.maybePop(context);
   }
 
   void _nextStep() {
@@ -170,8 +191,12 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
     String? repeatPreference,
   }) {
     if (_saved && afterEmotionKey == null) return true;
-    final recorded = _state.completeExercise(
+    _recordId = _state.recordPractice(
+      id: _recordId,
       exerciseId: _config.id,
+      sourceEntryId: _sourceEntry?.id,
+      beforeEmotionKey: _beforeEmotionKey,
+      beforeIntensity: _beforeIntensity,
       note: _collectedNote(),
       afterEmotionKey: afterEmotionKey,
       afterIntensity: afterIntensity,
@@ -179,8 +204,8 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
       easeRating: easeRating,
       repeatPreference: repeatPreference,
     );
-    _saved = recorded;
-    return recorded;
+    _saved = true;
+    return true;
   }
 
   void _completeWithoutAfter() {
@@ -203,7 +228,7 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
   void _saveAfterCheckin() {
     MindraMotion.of(_state.lowStimulationMode).medium();
     _saveSession(
-      afterEmotionKey: _afterEmotionKey ?? _state.selectedEmotionKey,
+      afterEmotionKey: _afterEmotionKey,
       afterIntensity: _afterIntensity,
       usefulnessRating: _usefulnessRating,
       easeRating: _easeRating,
@@ -223,89 +248,98 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height * 0.92;
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Container(
-        height: height,
-        decoration: const BoxDecoration(
-          color: AppColors.paper,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    return UnsavedChangesGuard(
+      dirty: !_saved && _writers.values.any((c) => c.text.trim().isNotEmpty),
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.line,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: _exit,
-                      icon: const Icon(Icons.close_rounded),
-                      color: AppColors.textTertiary,
-                    ),
-                    Expanded(
-                      child: Text(
-                        _config.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.titleMedium.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Text(
-                        _phase == _SessionPhase.running
-                            ? '${_stepIndex + 1}/$_totalSteps'
-                            : _config.durationLabel,
-                        style: AppTypography.kicker.copyWith(
-                          color: _config.accent,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: _progress,
-                    minHeight: 4,
-                    backgroundColor: AppColors.creamDark,
-                    color: _config.accent,
+        child: Container(
+          height: height,
+          decoration: const BoxDecoration(
+            color: AppColors.paper,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-              ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: MindraMotion.of(_state.lowStimulationMode)
-                      .mediumDuration,
-                  child: KeyedSubtree(
-                    key: ValueKey(_phase),
-                    child: switch (_phase) {
-                      _SessionPhase.intro => _buildIntro(),
-                      _SessionPhase.running => _buildRunning(),
-                      _SessionPhase.complete => _buildComplete(),
-                      _SessionPhase.afterCheckin => _buildAfterCheckin(),
-                    },
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: _exit,
+                        icon: const Icon(Icons.close_rounded),
+                        color: AppColors.textTertiary,
+                      ),
+                      Expanded(
+                        child: Text(
+                          _config.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.titleMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Text(
+                          _phase == _SessionPhase.running
+                              ? '${_stepIndex + 1}/$_totalSteps'
+                              : _config.durationLabel,
+                          style: AppTypography.kicker.copyWith(
+                            color: _config.accent,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      value: _progress,
+                      minHeight: 4,
+                      backgroundColor: AppColors.creamDark,
+                      color: _config.accent,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: MindraMotion.of(_state.lowStimulationMode)
+                        .mediumDuration,
+                    child: KeyedSubtree(
+                      key: ValueKey(_phase),
+                      child: switch (_phase) {
+                        _SessionPhase.intro => ScrollablePanel(
+                          child: _buildIntro(),
+                        ),
+                        _SessionPhase.running => _buildRunning(),
+                        _SessionPhase.complete => ScrollablePanel(
+                          child: _buildComplete(),
+                        ),
+                        _SessionPhase.afterCheckin => _buildAfterCheckin(),
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -345,6 +379,63 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
             _config.purpose,
             style: AppTypography.bodyMedium.copyWith(height: 1.5),
           ),
+          if (_sourceEntry != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'Gợi ý từ ghi chép ngày ${_sourceEntry!.timestamp.day}/${_sourceEntry!.timestamp.month}. Cảm xúc trước buổi này có thể khác.',
+                style: AppTypography.caption,
+              ),
+            ),
+          TextButton(
+            onPressed: () => setState(() {
+              if (_showBefore && ((_beforeEmotionKey == null) != (_beforeIntensity == null))) { _beforeEmotionKey = null; _beforeIntensity = null; }
+              _showBefore = !_showBefore;
+            }),
+            child: Text(
+              _showBefore
+                  ? 'Ẩn ghi nhận trước bài tập'
+                  : 'Ghi nhận trước bài tập (tùy chọn)',
+            ),
+          ),
+          if (_showBefore) ...[
+            const Text('Ngay lúc này, bạn cảm thấy thế nào?'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final e in MindraEmotions.all.values)
+                  ChoiceChip(
+                    label: Text(e.vi),
+                    selected: _beforeEmotionKey == e.key,
+                    onSelected: (_) =>
+                        setState(() => _beforeEmotionKey = e.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text('Cường độ cảm xúc trước bài tập'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (var i = 1; i <= 5; i++)
+                  ChoiceChip(
+                    label: Text('$i'),
+                    selected: _beforeIntensity == i,
+                    onSelected: (_) => setState(() => _beforeIntensity = i),
+                  ),
+              ],
+            ),
+            TextButton(
+              onPressed: () => setState(() {
+                _beforeEmotionKey = null;
+                _beforeIntensity = null;
+                _showBefore = false;
+              }),
+              child: const Text('Bỏ phần ghi nhận trước'),
+            ),
+          ],
           const Spacer(),
           Text(
             'Bạn có thể dừng bất cứ lúc nào. Không cần làm hoàn hảo.',
@@ -363,7 +454,10 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              onPressed: _start,
+              onPressed:
+                  (_beforeEmotionKey == null) == (_beforeIntensity == null)
+                  ? _start
+                  : null,
               child: const Text('Bắt đầu'),
             ),
           ),
@@ -407,77 +501,78 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'BƯỚC ${_stepIndex + 1}',
-            style: AppTypography.kicker.copyWith(fontSize: 10),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            prompt.title,
-            style: AppTypography.headlineMedium.copyWith(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'BƯỚC ${_stepIndex + 1}',
+              style: AppTypography.kicker.copyWith(fontSize: 10),
             ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            prompt.body,
-            style: AppTypography.bodyMedium.copyWith(height: 1.5),
-          ),
-          if (writable) ...[
-            const SizedBox(height: 20),
-            TextField(
-              controller: _writerFor(_stepIndex),
-              maxLines: 4,
-              style: AppTypography.bodyMedium,
-              decoration: InputDecoration(
-                hintText: prompt.placeholder ?? 'Viết vài từ, nếu muốn…',
-                hintStyle: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.all(16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppColors.line),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppColors.line),
-                ),
+            const SizedBox(height: 10),
+            Text(
+              prompt.title,
+              style: AppTypography.headlineMedium.copyWith(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
-              'Có thể bỏ qua nếu chưa muốn viết.',
-              style: AppTypography.caption,
+              prompt.body,
+              style: AppTypography.bodyMedium.copyWith(height: 1.5),
+            ),
+            if (writable) ...[
+              const SizedBox(height: 20),
+              TextField(
+                controller: _writerFor(_stepIndex),
+                maxLength: 1800,
+                maxLines: 4,
+                style: AppTypography.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: prompt.placeholder ?? 'Viết vài từ, nếu muốn…',
+                  hintStyle: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.all(16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.line),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.line),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Có thể bỏ qua nếu chưa muốn viết.',
+                style: AppTypography.caption,
+              ),
+            ],
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.ink,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: _nextStep,
+                child: Text(isLast ? 'Hoàn thành bài tập' : 'Tiếp tục'),
+              ),
             ),
           ],
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.ink,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: _nextStep,
-              child: Text(isLast ? 'Hoàn thành bài tập' : 'Tiếp tục'),
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
     );
   }
 
@@ -498,7 +593,7 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
           ),
           const SizedBox(height: 18),
           Text(
-            'Bạn đã dành ${_config.durationLabel.toLowerCase()} cho mình.',
+            'Bạn đã hoàn thành một khoảng nghỉ cho mình.',
             style: AppTypography.headlineMedium.copyWith(
               fontSize: 24,
               fontWeight: FontWeight.w800,
@@ -526,8 +621,8 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
                 MindraMotion.of(_state.lowStimulationMode).light();
                 _saveSession();
                 setState(() {
-                  _afterEmotionKey = _state.selectedEmotionKey;
-                  _afterIntensity = _state.currentIntensity;
+                  _afterEmotionKey = null;
+                  _afterIntensity = null;
                   _phase = _SessionPhase.afterCheckin;
                 });
               },
@@ -555,7 +650,7 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
     required Key key,
     required String label,
     required int? value,
-    required ValueChanged<int> onChanged,
+    required ValueChanged<int?> onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,14 +675,16 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
             ),
           ),
           selected: value == null ? <int>{} : <int>{value},
-          onSelectionChanged: (selection) => onChanged(selection.first),
+          onSelectionChanged: (selection) => onChanged(selection.firstOrNull),
         ),
       ],
     );
   }
 
   Widget _buildAfterCheckin() {
-    final before = _state.selectedEmotion;
+    final before = _beforeEmotionKey == null
+        ? null
+        : MindraEmotions.get(_beforeEmotionKey);
     final keys = const ['calm', 'happy', 'stressed', 'sad', 'anxious', 'tired'];
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
@@ -607,7 +704,9 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Trước: ${before.vi} ${_state.currentIntensity}/5',
+            before == null
+                ? 'Chưa ghi nhận cảm xúc trước bài tập.'
+                : 'Trước: ${before.vi}${_beforeIntensity == null ? '' : ' $_beforeIntensity/5'}',
             style: AppTypography.caption,
           ),
           const SizedBox(height: 16),
@@ -616,7 +715,7 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
             runSpacing: 8,
             children: keys.map((key) {
               final emo = MindraEmotions.get(key);
-              final selected = (_afterEmotionKey ?? before.key) == key;
+              final selected = _afterEmotionKey == key;
               return Semantics(
                 button: true,
                 selected: selected,
@@ -664,8 +763,9 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
             style: AppTypography.kicker.copyWith(fontSize: 10),
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: List.generate(5, (index) {
               final level = index + 1;
               final selected = _afterIntensity == level;
@@ -754,7 +854,7 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
                 ? <String>{}
                 : <String>{_repeatPreference!},
             onSelectionChanged: (selection) =>
-                setState(() => _repeatPreference = selection.first),
+                setState(() => _repeatPreference = selection.firstOrNull),
           ),
           const SizedBox(height: 18),
           SizedBox(
@@ -769,7 +869,9 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              onPressed: _saveAfterCheckin,
+              onPressed: _afterEmotionKey != null && _afterIntensity != null
+                  ? _saveAfterCheckin
+                  : null,
               child: const Text('Lưu cảm xúc sau bài tập'),
             ),
           ),
@@ -800,7 +902,8 @@ class _BreathGuide extends StatefulWidget {
   State<_BreathGuide> createState() => _BreathGuideState();
 }
 
-class _BreathGuideState extends State<_BreathGuide> {
+class _BreathGuideState extends State<_BreathGuide>
+    with WidgetsBindingObserver {
   _BreathPhase _phase = _BreathPhase.inhale;
   int _secondsLeft = 0;
   int _cycle = 1;
@@ -809,11 +912,13 @@ class _BreathGuideState extends State<_BreathGuide> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startPhase(_BreathPhase.inhale);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }
@@ -842,6 +947,13 @@ class _BreathGuideState extends State<_BreathGuide> {
       widget.onCompleted();
       return;
     }
+    _runTimer();
+    setState(() {});
+  }
+
+  void _runTimer() {
+    _timer?.cancel();
+    if (_phase == _BreathPhase.completed) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       if (_secondsLeft > 1) {
@@ -850,7 +962,15 @@ class _BreathGuideState extends State<_BreathGuide> {
         _nextPhase();
       }
     });
-    setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) {
+      _runTimer();
+    } else {
+      _timer?.cancel();
+    }
   }
 
   void _nextPhase() {

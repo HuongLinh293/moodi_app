@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/garden_layout.dart';
+import '../core/device_auth_service.dart';
 import '../core/reminder_service.dart';
 import '../models/ai_reflection.dart';
 import '../models/badge_item.dart';
@@ -12,10 +15,13 @@ import '../models/emotion.dart';
 import '../models/garden_moment.dart';
 import '../models/journal_entry.dart';
 import '../models/micro_goal.dart';
+import '../models/practice_record.dart';
+import '../repositories/practice_repository.dart';
 import '../models/shared_garden.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/garden_repository.dart';
 import '../repositories/journal_repository.dart';
+import '../repositories/journal_cache.dart';
 import '../repositories/reflection_repository.dart';
 import '../repositories/shared_garden_repository.dart';
 import '../repositories/user_repository.dart';
@@ -32,6 +38,9 @@ class MindraState extends ChangeNotifier {
   final SharedGardenRepository _sharedGardenRepository;
   final UserRepository _userRepository;
   final ReminderService _reminderService;
+  final JournalCache _journalCache;
+  final PracticeRepository _practiceRepository;
+  final DeviceAuthService _deviceAuth;
 
   StreamSubscription<AuthUser?>? _authSubscription;
   StreamSubscription<List<JournalEntry>>? _entriesSubscription;
@@ -68,6 +77,9 @@ class MindraState extends ChangeNotifier {
     SharedGardenRepository? sharedGardenRepository,
     UserRepository? userRepository,
     ReminderService? reminderService,
+    JournalCache? journalCache,
+    PracticeRepository? practiceRepository,
+    DeviceAuthService? deviceAuth,
     List<JournalEntry>? initialEntries,
     List<MicroGoal>? initialMicroGoals,
     bool? isAuthenticated,
@@ -78,6 +90,9 @@ class MindraState extends ChangeNotifier {
        _sharedGardenRepository =
            sharedGardenRepository ?? SharedGardenRepository(),
        _userRepository = userRepository ?? UserRepository(),
+       _deviceAuth = deviceAuth ?? DeviceAuthService(),
+       _practiceRepository = practiceRepository ?? PracticeRepository(),
+       _journalCache = journalCache ?? JournalCache(),
        _reminderService = reminderService ?? ReminderService() {
     if (initialEntries != null && initialEntries.isNotEmpty) {
       _entries.addAll(initialEntries);
@@ -107,17 +122,23 @@ class MindraState extends ChangeNotifier {
       _authSubscription = _authRepository.authStateChanges.listen((u) {
         if (_disposed) return;
         _sessionRevision++;
+        _resetSessionUi();
         _entriesSubscription?.cancel();
         _gardenSubscription?.cancel();
         _clearSharedSession();
         _entries.clear();
+        _practiceRecords.clear();
+        _pendingPracticeIds.clear();
         _gardenMoments.clear();
         _aiReflections.clear();
+        _unsentFeedback.clear();
         _reflectionRequests.clear();
         _weeklyReview = null;
         _microGoals.clear();
         _entrySync.clear();
         _entryWriteVersions.clear();
+        _awaitingRemoteEntryIds.clear();
+        _remoteMisses.clear();
         if (u != null) {
           _isAuthenticated = true;
           _userEmail = u.email;
@@ -133,6 +154,8 @@ class MindraState extends ChangeNotifier {
           _gardenSubscription?.cancel();
           _entrySync.clear();
           _entryWriteVersions.clear();
+          _awaitingRemoteEntryIds.clear();
+        _remoteMisses.clear();
           _entries.clear();
           _gardenMoments.clear();
           _microGoals.clear();
@@ -157,7 +180,15 @@ class MindraState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void openJournal() {
+  DateTime? _journalFocusDate;
+  DateTime? get journalFocusDate => _journalFocusDate;
+  int _journalFocusSeq = 0;
+  int get journalFocusSeq => _journalFocusSeq;
+  void openJournal({String? entryId}) {
+    _journalFocusDate = entryId == null
+        ? DateTime.now()
+        : entryById(entryId)?.timestamp ?? DateTime.now();
+    _journalFocusSeq++;
     _personalSpaceSection = 0;
     setTab(1);
     notifyListeners();
@@ -312,7 +343,9 @@ class MindraState extends ChangeNotifier {
   }
 
   Future<void> deleteAllUserData() async {
+    await flushLocalData();
     await Future.wait(List.of(_pendingWrites));
+    await _practiceQueue;
     final uid = _requireUserId();
     final revision = _sessionRevision;
     if (_sharedGarden != null) {
@@ -320,7 +353,13 @@ class MindraState extends ChangeNotifier {
     }
     await _journalRepository.deleteAllEntries(userId: uid);
     await _gardenRepository.deleteAllMoments(userId: uid);
-    if (!_disposed && revision == _sessionRevision) clearAllData();
+    if (!_disposed && revision == _sessionRevision) {
+      clearAllData();
+      await flushLocalData();
+      if (cacheWriteFailed) {
+        throw StateError('Dữ liệu trên server đã xóa nhưng chưa xóa được bản trên máy. Hãy giữ app mở và thử lại.');
+      }
+    }
   }
 
   AuthRepository get authRepository => _authRepository;
@@ -345,8 +384,70 @@ class MindraState extends ChangeNotifier {
   }
 
   void updateAIReflection(String entryId, AIReflection reflection) {
+    reflection = reflection.copyWith(
+      id: reflection.id ?? _aiReflections[entryId]?.id,
+    );
     _aiReflections[entryId] = reflection;
+    if (reflection.userFeedback != null) _unsentFeedback.add(entryId);
+    _saveUserContent();
+    unawaited(_sendReflectionFeedback(entryId, reflection));
     notifyListeners();
+  }
+
+  // Phản hồi phản tư chưa gửi được lên server; chỉ gửi lại những cái này.
+  final Set<String> _unsentFeedback = {};
+  void _resendFeedback() {
+    for (final id in List.of(_unsentFeedback)) {
+      final r = _aiReflections[id];
+      if (r == null) {
+        _unsentFeedback.remove(id);
+      } else {
+        unawaited(_sendReflectionFeedback(id, r));
+      }
+    }
+  }
+
+  Future<void> _sendReflectionFeedback(
+    String entryId,
+    AIReflection reflection,
+  ) async {
+    final uid = currentUserId;
+    final revision = _sessionRevision;
+    if (uid == null ||
+        reflection.id == null ||
+        reflection.userFeedback == null) {
+      return;
+    }
+    try {
+      final edits = Map<String, dynamic>.of(reflection.toJson())
+        ..removeWhere(
+          (k, _) => [
+            'id',
+            'source',
+            'safetyFlag',
+            'safetyReason',
+            'userFeedback',
+          ].contains(k),
+        );
+      await _reflectionRepository.saveReflectionFeedback(
+        reflectionId: reflection.id!,
+        feedback: reflection.userFeedback!,
+        helpful: reflection.userFeedback == 'accurate',
+        edits: edits,
+      );
+      if (!_disposed &&
+          currentUserId == uid &&
+          revision == _sessionRevision &&
+          identical(_aiReflections[entryId], reflection)) {
+        _unsentFeedback.remove(entryId);
+        _saveUserContent();
+      }
+    } catch (_) {
+      if (!_disposed && currentUserId == uid && revision == _sessionRevision) {
+        _personalDataError = 'Chỉnh sửa phản tư được giữ trên máy, chưa gửi được phản hồi. Hãy thử cập nhật lại.';
+        notifyListeners();
+      }
+    }
   }
 
   int get totalCheckins => _entries.length;
@@ -366,7 +467,29 @@ class MindraState extends ChangeNotifier {
   }
 
   int get exercisesCompleted =>
+      _practiceRecords.length +
       _entries.where((entry) => entry.exerciseDone).length;
+  int get practicesThisWeek {
+    final now = DateTime.now();
+    final start = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
+    final end = start.add(const Duration(days: 7));
+    return _practiceRecords
+            .where(
+              (r) => !r.timestamp.isBefore(start) && r.timestamp.isBefore(end),
+            )
+            .length +
+        thisWeekEntries.where((e) => e.exerciseDone).length;
+  }
+
+  final List<PracticeRecord> _practiceRecords = [];
+  final Set<String> _pendingPracticeIds = {};
+  Future<void> _practiceQueue = Future.value();
+  List<PracticeRecord> get practiceRecords =>
+      List.unmodifiable(_practiceRecords);
 
   JournalEntry? get todayEntry => _entryForDay(DateTime.now());
 
@@ -456,14 +579,14 @@ class MindraState extends ChangeNotifier {
   }
 
   double get averageIntensityThisWeek {
-    final list = thisWeekEntries.isNotEmpty ? thisWeekEntries : _entries;
+    final list = thisWeekEntries;
     if (list.isEmpty) return 0.0;
     final sum = list.map((e) => e.intensity).reduce((a, b) => a + b);
     return sum / list.length;
   }
 
   String? get dominantEmotionThisWeek {
-    final list = thisWeekEntries.isNotEmpty ? thisWeekEntries : _entries;
+    final list = thisWeekEntries;
     if (list.isEmpty) return null;
     final counts = <String, int>{};
     for (final e in list) {
@@ -481,7 +604,7 @@ class MindraState extends ChangeNotifier {
   }
 
   String? get dominantTriggerThisWeek {
-    final list = thisWeekEntries.isNotEmpty ? thisWeekEntries : _entries;
+    final list = thisWeekEntries;
     if (list.isEmpty) return null;
     final counts = <String, int>{};
     for (final e in list) {
@@ -514,6 +637,29 @@ class MindraState extends ChangeNotifier {
   }
 
   JournalEntry? get latestExerciseWithFeedback {
+    final record = _practiceRecords
+        .where(
+          (r) =>
+              r.beforeIntensity != null &&
+              r.afterIntensity != null &&
+              r.beforeEmotionKey != null,
+        )
+        .firstOrNull;
+    if (record != null) {
+      return JournalEntry(
+        id: record.id,
+        timestamp: record.timestamp,
+        emotionKey: record.beforeEmotionKey!,
+        intensity: record.beforeIntensity!,
+        exerciseDone: true,
+        exerciseId: record.exerciseId,
+        afterEmotionKey: record.afterEmotionKey,
+        afterIntensity: record.afterIntensity,
+        usefulnessRating: record.usefulnessRating,
+        easeRating: record.easeRating,
+        repeatPreference: record.repeatPreference,
+      );
+    }
     try {
       return _entries.firstWhere(
         (e) => e.exerciseDone && e.afterIntensity != null,
@@ -524,8 +670,9 @@ class MindraState extends ChangeNotifier {
   }
 
   void selectEmotion(String key) {
+    final changed = !_hasChosenEmotion || _selectedEmotionKey != key;
     _hasChosenEmotion = true;
-    if (_selectedEmotionKey != key) {
+    if (changed) {
       _selectedEmotionKey = key;
       notifyListeners();
     }
@@ -543,8 +690,166 @@ class MindraState extends ChangeNotifier {
     }
   }
 
+  bool _loadingPersonalData = false;
+  bool get loadingPersonalData => _loadingPersonalData;
+  String? _personalDataError;
+  String? get personalDataError => _personalDataError;
+  DateTime? _lastPersonalSync;
+  DateTime? get lastPersonalSync => _lastPersonalSync;
+  bool _cacheWriteFailed = false;
+  bool _userContentWriteFailed = false;
+  bool get cacheWriteFailed => _cacheWriteFailed || _userContentWriteFailed;
+  Future<void> _cacheQueue = Future.value();
+  Future<void> _userContentQueue = Future.value();
+  Future<void>? _restoringJournalCache;
+  final Set<String> _durableEntryIds = {};
+  bool isEntryOnDevice(String id) => _durableEntryIds.contains(id);
+
+  Future<void> flushLocalData() async {
+    await _cacheQueue;
+    await _userContentQueue;
+    await _preferencesQueue;
+    await _consentQueue;
+  }
+
+  Future<void> _persistJournal() {
+    final uid = currentUserId;
+    final revision = _sessionRevision;
+    if (uid == null) return Future.value();
+    final restoring = _restoringJournalCache;
+    if (restoring != null) {
+      return restoring.then((_) {
+        if (!_disposed &&
+            currentUserId == uid &&
+            revision == _sessionRevision) {
+          return _persistJournal();
+        }
+      });
+    }
+    final versions = Map<String, int>.of(_entryWriteVersions);
+    final ids = _entries.map((e) => e.id).toSet();
+    final snapshot = <String, dynamic>{
+      'entries': [
+        for (final e in _entries) {...e.toJson(), 'id': e.id},
+      ],
+      'sync': {for (final e in _entries) e.id: entrySyncStatus(e.id).name},
+      'moments': [
+        for (final m in _gardenMoments) {...m.toJson(), 'id': m.id},
+      ],
+      'practice': [for (final record in _practiceRecords) record.toJson()],
+      'pendingPractice': _pendingPracticeIds.toList(),
+    };
+    final write = _cacheQueue.then((_) => _journalCache.write(uid, snapshot));
+    _cacheQueue = write
+        .then((_) {
+          if (!_disposed && currentUserId == uid && revision == _sessionRevision) {
+            _cacheWriteFailed = false;
+            _durableEntryIds.removeWhere((id) => !ids.contains(id));
+            for (final id in ids) {
+              if (versions[id] == _entryWriteVersions[id]) {
+                _durableEntryIds.add(id);
+              }
+            }
+            notifyListeners();
+          }
+        })
+        .catchError((Object e) {
+          if (!_disposed && currentUserId == uid && revision == _sessionRevision) {
+            _cacheWriteFailed = true;
+            notifyListeners();
+          }
+        });
+    return _cacheQueue;
+  }
+
+  Future<void> _loadJournalCache(String uid) async {
+    final revision = _sessionRevision;
+    try {
+      final data = await _journalCache.read(uid);
+      if (data == null ||
+          _disposed ||
+          currentUserId != uid ||
+          revision != _sessionRevision) {
+        return;
+      }
+      final statuses = data['sync'] as Map? ?? {};
+      for (final raw in (data['practice'] as List? ?? []).whereType<Map>()) {
+        final record = PracticeRecord.fromJson(Map<String, dynamic>.from(raw));
+        if (!_practiceRecords.any((r) => r.id == record.id)) {
+          _practiceRecords.add(record);
+        }
+      }
+      _pendingPracticeIds.addAll(
+        (data['pendingPractice'] as List? ?? []).whereType<String>(),
+      );
+      for (final raw in (data['entries'] as List? ?? []).whereType<Map>()) {
+        final e = JournalEntry.fromJson(Map<String, dynamic>.from(raw));
+        if (_entries.any((local) => local.id == e.id)) continue;
+        _entries.add(e);
+        _durableEntryIds.add(e.id);
+        _entrySync[e.id] = statuses[e.id] == 'synced'
+            ? EntrySyncStatus.synced
+            : EntrySyncStatus.failed;
+      }
+      if (_gardenMoments.isEmpty) {
+        _gardenMoments.addAll(
+          (data['moments'] as List? ?? []).whereType<Map>().map(
+            (m) => GardenMoment.fromJson(Map<String, dynamic>.from(m)),
+          ),
+        );
+      }
+      _entries.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      notifyListeners();
+    } catch (_) {
+      if (!_disposed && currentUserId == uid) _cacheWriteFailed = true;
+    }
+  }
+
   final Map<String, EntrySyncStatus> _entrySync = {};
   final Map<String, int> _entryWriteVersions = {};
+  final Set<String> _awaitingRemoteEntryIds = {};
+  final Map<String, int> _remoteMisses = {};
+
+  void _mergeRemoteEntries(List<JournalEntry> remote) {
+    final byId = {for (final e in remote) e.id: e};
+    _awaitingRemoteEntryIds.removeWhere((id) {
+      final local = entryById(id);
+      final fresh = byId[id];
+      if (local == null) return true;
+      if (fresh == null) {
+        // Đã ghi xong mà hai lần tải liền server vẫn không có: entry đã bị
+        // xóa ở máy khác. Một lần thiếu có thể do lần tải chạy trước lần ghi.
+        final settled =
+            entrySyncStatus(id) == EntrySyncStatus.synced &&
+            !_pendingEntryWrites.containsKey(id);
+        final misses = settled ? (_remoteMisses[id] ?? 0) + 1 : 0;
+        if (misses < 2) {
+          _remoteMisses[id] = misses;
+          return false;
+        }
+        _remoteMisses.remove(id);
+        return true;
+      }
+      _remoteMisses.remove(id);
+      final a = local.toJson()..remove('timestamp');
+      final b = fresh.toJson()..remove('timestamp');
+      return jsonEncode(a) == jsonEncode(b);
+    });
+    final protected = _entries
+        .where(
+          (e) =>
+              entrySyncStatus(e.id) != EntrySyncStatus.synced ||
+              _awaitingRemoteEntryIds.contains(e.id),
+        )
+        .toList();
+    final ids = protected.map((e) => e.id).toSet();
+    _entries
+      ..clear()
+      ..addAll(remote.where((e) => !ids.contains(e.id)))
+      ..addAll(protected)
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
   int _entryWriteSequence = 0;
   final Set<Future<void>> _pendingWrites = {};
   // Lệnh ghi đang chạy theo từng entry, để removeEntry chờ chúng xong trước
@@ -560,9 +865,15 @@ class MindraState extends ChangeNotifier {
       _entrySync.values.where((s) => s == EntrySyncStatus.sessionOnly).length;
 
   String entrySaveMessage(String id) => switch (entrySyncStatus(id)) {
-    EntrySyncStatus.pending => 'Đang đồng bộ ghi chép…',
+    EntrySyncStatus.pending =>
+      isEntryOnDevice(id)
+          ? 'Đã lưu trên máy. Đang đồng bộ ghi chép…'
+          : 'Đang lưu ghi chép…',
     EntrySyncStatus.synced => 'Ghi chép đã được đồng bộ.',
-    EntrySyncStatus.failed => 'Chưa đồng bộ được. Mở Nhật ký để thử lại.',
+    EntrySyncStatus.failed =>
+      isEntryOnDevice(id)
+          ? 'Đã lưu trên máy, chưa đồng bộ. Mở Nhật ký để thử lại.'
+          : 'Chưa lưu được trên máy hoặc tài khoản. Hãy giữ app mở và thử lại.',
     EntrySyncStatus.sessionOnly =>
       'Ghi chép chỉ có trong phiên này, chưa được lưu lâu dài.',
   };
@@ -588,6 +899,7 @@ class MindraState extends ChangeNotifier {
       _reflectionVersions[entry.id] = (_reflectionVersions[entry.id] ?? 0) + 1;
     }
     _entries[index] = entry;
+    _saveUserContent();
     _queueEntryWrite(entry);
   }
 
@@ -595,12 +907,26 @@ class MindraState extends ChangeNotifier {
     final uid = currentUserId;
     final version = ++_entryWriteSequence;
     _entryWriteVersions[entry.id] = version;
+    _durableEntryIds.remove(entry.id);
+    _awaitingRemoteEntryIds.add(entry.id);
     _entrySync[entry.id] = uid == null
         ? EntrySyncStatus.sessionOnly
         : EntrySyncStatus.pending;
     notifyListeners();
     if (uid == null) return;
-    final write = _writeEntry(entry, uid, version);
+    final revision = _sessionRevision;
+    final previousWrites = List<Future<void>>.of(
+      _pendingEntryWrites[entry.id] ?? {},
+    );
+    final cached = _persistJournal();
+    final write = () async {
+      await cached;
+      await Future.wait(previousWrites);
+      if (_disposed || currentUserId != uid || revision != _sessionRevision) {
+        return;
+      }
+      await _writeEntry(entry, uid, version);
+    }();
     _pendingWrites.add(write);
     final entryWrites = _pendingEntryWrites.putIfAbsent(entry.id, () => {})
       ..add(write);
@@ -627,6 +953,7 @@ class MindraState extends ChangeNotifier {
       return;
     }
     _entrySync[entry.id] = result;
+    unawaited(_persistJournal());
     notifyListeners();
   }
 
@@ -650,8 +977,19 @@ class MindraState extends ChangeNotifier {
     if (_disposed || _authRepository.currentUserId != uid) return;
     _entrySync.remove(id);
     _entryWriteVersions.remove(id);
+    _awaitingRemoteEntryIds.remove(id);
     _entries.removeWhere((e) => e.id == id);
+    _practiceRecords.removeWhere((r) => r.sourceEntryId == id);
+    _pendingPracticeIds.removeWhere(
+      (id) => !_practiceRecords.any((r) => r.id == id),
+    );
+    _aiReflections.remove(id);
+    _reflectionRequests.remove(id);
+    _reflectionVersions[id] = (_reflectionVersions[id] ?? 0) + 1;
+    _saveUserContent();
     _gardenMoments.removeWhere((moment) => moment.entryId == id);
+    _durableEntryIds.remove(id);
+    await _persistJournal();
     notifyListeners();
   }
 
@@ -753,6 +1091,7 @@ class MindraState extends ChangeNotifier {
     if (_disposed || _authRepository.currentUserId != uid) return null;
     _gardenMoments.removeWhere((m) => m.id == moment.id);
     _gardenMoments.add(moment);
+    unawaited(_persistJournal());
     notifyListeners();
     return moment;
   }
@@ -764,6 +1103,7 @@ class MindraState extends ChangeNotifier {
     }
     if (_disposed || _authRepository.currentUserId != uid) return;
     _gardenMoments.removeWhere((moment) => moment.id == momentId);
+    await _persistJournal();
     notifyListeners();
   }
 
@@ -1073,9 +1413,47 @@ class MindraState extends ChangeNotifier {
     }
   }
 
-  /// Ghi nhận bài thực hành vào check-in hôm nay và đồng bộ lên server.
-  /// Trả false khi không có cảm xúc nào do người dùng chọn để gắn vào: Moodi
-  /// không tự tạo check-in với cảm xúc người dùng chưa chọn.
+  /// Practice is a separate event: missing before/after answers stay unknown.
+  String recordPractice({
+    String? id,
+    required String exerciseId,
+    String note = '',
+    String? sourceEntryId,
+    String? beforeEmotionKey,
+    int? beforeIntensity,
+    String? afterEmotionKey,
+    int? afterIntensity,
+    int? usefulnessRating,
+    int? easeRating,
+    String? repeatPreference,
+  }) {
+    final recordId = id ?? 'practice-${DateTime.now().microsecondsSinceEpoch}';
+    final previous = _practiceRecords
+        .where((r) => r.id == recordId)
+        .firstOrNull;
+    final record = PracticeRecord(
+      id: recordId,
+      exerciseId: exerciseId,
+      timestamp: previous?.timestamp ?? DateTime.now(),
+      sourceEntryId: sourceEntryId,
+      note: note.trim(),
+      beforeEmotionKey: beforeEmotionKey,
+      beforeIntensity: beforeIntensity,
+      afterEmotionKey: afterEmotionKey,
+      afterIntensity: afterIntensity,
+      usefulnessRating: usefulnessRating,
+      easeRating: easeRating,
+      repeatPreference: repeatPreference,
+    );
+    _practiceRecords.removeWhere((r) => r.id == recordId);
+    _practiceRecords.insert(0, record);
+    _pendingPracticeIds.add(recordId);
+    final saved = _persistJournal();
+    unawaited(saved.then((_) => _uploadPractice(record)));
+    notifyListeners();
+    return recordId;
+  }
+
   bool completeExercise({
     required String exerciseId,
     String note = '',
@@ -1085,50 +1463,93 @@ class MindraState extends ChangeNotifier {
     int? easeRating,
     String? repeatPreference,
   }) {
-    final today = _entryForDay(DateTime.now());
-    final trimmed = note.trim();
-    if (today != null) {
-      // Ghi chú bài tập nối vào "phản ứng"; giữ nguyên suy nghĩ người dùng viết.
-      final response = trimmed.isEmpty || today.response.contains(trimmed)
-          ? today.response
-          : (today.response.isEmpty ? trimmed : '${today.response}\n$trimmed');
-      updateEntry(
-        today.copyWith(
-          exerciseId: exerciseId,
-          exerciseDone: true,
-          response: response,
-          afterEmotionKey: afterEmotionKey ?? today.afterEmotionKey,
-          afterIntensity: afterIntensity ?? today.afterIntensity,
-          usefulnessRating: usefulnessRating ?? today.usefulnessRating,
-          easeRating: easeRating ?? today.easeRating,
-          repeatPreference: repeatPreference ?? today.repeatPreference,
-        ),
-      );
-      return true;
-    }
-
-    // Chưa check-in hôm nay: chỉ tạo khi có cảm xúc do người dùng chọn
-    // (cảm xúc sau bài tập, hoặc cảm xúc vừa chọn trên màn Hôm nay).
-    final emotionKey =
-        afterEmotionKey ?? (_hasChosenEmotion ? _selectedEmotionKey : null);
-    if (emotionKey == null) return false;
-    addEntry(
-      JournalEntry(
-        id: 'entry-${DateTime.now().millisecondsSinceEpoch}',
-        timestamp: DateTime.now(),
-        emotionKey: emotionKey,
-        intensity: afterIntensity ?? _currentIntensity,
-        response: trimmed,
-        exerciseId: exerciseId,
-        exerciseDone: true,
-        afterEmotionKey: afterEmotionKey,
-        afterIntensity: afterIntensity,
-        usefulnessRating: usefulnessRating,
-        easeRating: easeRating,
-        repeatPreference: repeatPreference,
-      ),
+    final source = todayEntry;
+    recordPractice(
+      exerciseId: exerciseId,
+      note: note,
+      sourceEntryId: source?.id,
+      beforeEmotionKey: null,
+      beforeIntensity: null,
+      afterEmotionKey: afterEmotionKey,
+      afterIntensity: afterIntensity,
+      usefulnessRating: usefulnessRating,
+      easeRating: easeRating,
+      repeatPreference: repeatPreference,
     );
     return true;
+  }
+
+  Future<void> _uploadPractice(PracticeRecord record) {
+    final uid = currentUserId;
+    final revision = _sessionRevision;
+    if (uid == null) return Future.value();
+    _practiceQueue = _practiceQueue.then((_) async {
+      if (_disposed || currentUserId != uid || revision != _sessionRevision) {
+        return;
+      }
+      try {
+        final sourceId = record.sourceEntryId;
+        final source = sourceId == null ? null : entryById(sourceId);
+        if (source != null) {
+          // Server chỉ nhận buổi tập khi check-in gốc đã có trên server.
+          if (entrySyncStatus(source.id) != EntrySyncStatus.synced &&
+              !_pendingEntryWrites.containsKey(source.id)) {
+            _queueEntryWrite(source);
+          }
+          final writes = _pendingEntryWrites[source.id];
+          if (writes != null) await Future.wait(List.of(writes));
+          if (entrySyncStatus(source.id) != EntrySyncStatus.synced) {
+            throw StateError('source entry not synced');
+          }
+        }
+        await _practiceRepository.save(record);
+        if (_disposed || currentUserId != uid || revision != _sessionRevision) {
+          return;
+        }
+        // A later edit still needs to be uploaded.
+        if (identical(
+          _practiceRecords.where((r) => r.id == record.id).firstOrNull,
+          record,
+        )) {
+          _pendingPracticeIds.remove(record.id);
+        }
+        await _persistJournal();
+      } catch (_) {
+        if (!_disposed &&
+            currentUserId == uid &&
+            revision == _sessionRevision) {
+          _personalDataError = 'Buổi thực hành đã lưu trên máy, chưa đồng bộ. Bạn có thể thử cập nhật lại.';
+          notifyListeners();
+        }
+      }
+    });
+    return _practiceQueue;
+  }
+
+  Future<void> _refreshPractice(String uid) async {
+    final revision = _sessionRevision;
+    for (final record in List<PracticeRecord>.of(_practiceRecords)) {
+      if (_pendingPracticeIds.contains(record.id)) {
+        await _uploadPractice(record);
+      }
+    }
+    try {
+      final records = await _practiceRepository.fetch();
+      if (_disposed || currentUserId != uid || revision != _sessionRevision)
+        return;
+      final pending = _practiceRecords
+          .where((r) => _pendingPracticeIds.contains(r.id))
+          .toList();
+      _practiceRecords
+        ..clear()
+        ..addAll(records.where((r) => !pending.any((p) => p.id == r.id)))
+        ..addAll(pending)
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      await _persistJournal();
+      notifyListeners();
+    } catch (_) {
+      /* The local history remains available. */
+    }
   }
 
   void saveCurrentCheckin({String? note}) {
@@ -1144,7 +1565,9 @@ class MindraState extends ChangeNotifier {
   }
 
   // Settings & Privacy State (S19, S20, S21)
-  bool _aiConsent = true;
+  bool _aiConsent = false;
+  int _aiConsentChanges = 0;
+  Future<void> _consentQueue = Future.value();
   bool get aiConsent => _aiConsent;
 
   bool _lowStimulationMode = false;
@@ -1155,6 +1578,30 @@ class MindraState extends ChangeNotifier {
 
   bool _appLockEnabled = false;
   bool get appLockEnabled => _appLockEnabled;
+  bool _appUnlocked = false;
+  bool get appUnlocked => _appUnlocked;
+  void lockApplication() {
+    if (!_appLockEnabled || _disposed) return;
+    _appUnlocked = false;
+    notifyListeners();
+  }
+
+  Future<bool> unlockApplication() async {
+    final revision = _sessionRevision;
+    final accepted = await _deviceAuth.authenticate();
+    if (!accepted || _disposed || revision != _sessionRevision) return false;
+    _appUnlocked = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// Lối thoát khi thiết bị không xác thực được nữa: tắt khóa và đăng xuất.
+  /// Đăng nhập lại cần mật khẩu, nên không ai đọc được dữ liệu nhờ nút này.
+  Future<void> signOutFromLock() async {
+    _appLockEnabled = false;
+    await _savePreferences();
+    await logout();
+  }
 
   bool _reminderEnabled = false;
   bool get reminderEnabled => _reminderEnabled;
@@ -1169,9 +1616,27 @@ class MindraState extends ChangeNotifier {
   List<String> get userGoals => List.unmodifiable(_userGoals);
 
   Map<String, String>? _weeklyReview;
-  Map<String, String>? get weeklyReview => _weeklyReview;
+  final Map<String, Map<String, String>> _weeklyReviewHistory = {};
+  List<Map<String, String>> get weeklyReviewHistory =>
+      _weeklyReviewHistory.values.toList()
+        ..sort((a, b) => (b['date'] ?? '').compareTo(a['date'] ?? ''));
+  Map<String, String>? get weeklyReview {
+    final review = _weeklyReview;
+    final date = DateTime.tryParse(review?['date'] ?? '');
+    if (date == null) return null;
+    final now = DateTime.now();
+    final start = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
+    return !date.isBefore(start) &&
+            date.isBefore(start.add(const Duration(days: 7)))
+        ? Map.unmodifiable(review!)
+        : null;
+  }
 
-  static const _aiConsentKey = 'moodi.aiConsent.v1';
+  String _aiConsentKey(String uid) => 'moodi.aiConsent.$uid.v2';
   static const _prefsStorage = FlutterSecureStorage(
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
@@ -1183,19 +1648,29 @@ class MindraState extends ChangeNotifier {
 
   void setAiConsent(bool val) {
     _aiConsent = val;
+    _aiConsentChanges++;
     notifyListeners();
-    unawaited(
-      _prefsStorage
-          .write(key: _aiConsentKey, value: val.toString())
-          .catchError((Object e) => debugPrint('aiConsent save failed: $e')),
-    );
+    final uid = currentUserId;
+    if (uid == null) return;
+    _consentQueue = _consentQueue.then((_) => _prefsStorage.write(key: _aiConsentKey(uid), value: val.toString())).catchError((Object e) => debugPrint('aiConsent save failed: $e'));
+
   }
 
   /// Đọc lựa chọn gửi nhật ký cho AI đã lưu (gọi khi mở app).
   Future<void> loadAiConsent() async {
+    final changes = _aiConsentChanges;
+    final uid = currentUserId;
+    final revision = _sessionRevision;
+    if (uid == null) return;
     try {
-      final raw = await _prefsStorage.read(key: _aiConsentKey);
-      if (raw == null || _disposed) return;
+      var raw = await _prefsStorage.read(key: _aiConsentKey(uid));
+      if (raw == null &&
+          await _prefsStorage.read(key: 'moodi.aiConsent.v1') == 'true') {
+        // Bản cũ lưu lựa chọn chung cho máy: giữ lại lựa chọn bật AI rõ ràng.
+        raw = 'true';
+        await _prefsStorage.write(key: _aiConsentKey(uid), value: raw);
+      }
+      if (_disposed || currentUserId != uid || revision != _sessionRevision || changes != _aiConsentChanges) return;
       _aiConsent = raw == 'true';
       notifyListeners();
     } catch (e) {
@@ -1234,6 +1709,8 @@ class MindraState extends ChangeNotifier {
       _lowStimulationMode =
           data['lowStimulation'] as bool? ?? _lowStimulationMode;
       _gardenVisible = data['gardenVisible'] as bool? ?? _gardenVisible;
+      _appLockEnabled = data['appLock'] as bool? ?? false;
+      _appUnlocked = false;
       final goals = (data['goals'] as List?)?.whereType<String>().toList();
       if (goals != null && goals.isNotEmpty) {
         _userGoals
@@ -1248,41 +1725,84 @@ class MindraState extends ChangeNotifier {
     }
   }
 
-  void _savePreferences() {
-    unawaited(
-      _prefsStorage
-          .write(
-            key: _preferencesKey,
-            value: jsonEncode({
-              'onboardingCompleted': _onboardingCompleted,
-              'lowStimulation': _lowStimulationMode,
-              'gardenVisible': _gardenVisible,
-              'goals': _userGoals,
-            }),
-          )
-          .catchError((Object e) => debugPrint('preferences save failed: $e')),
+  Future<void> _preferencesQueue = Future.value();
+  Future<bool> _savePreferences() {
+    final snapshot = jsonEncode({
+      'onboardingCompleted': _onboardingCompleted,
+      'lowStimulation': _lowStimulationMode,
+      'gardenVisible': _gardenVisible,
+      'appLock': _appLockEnabled,
+      'goals': _userGoals,
+    });
+    final write = _preferencesQueue.then(
+      (_) => _prefsStorage.write(key: _preferencesKey, value: snapshot),
     );
+    _preferencesQueue = write.catchError(
+      (Object e) => debugPrint('preferences save failed: $e'),
+    );
+    return write.then((_) => true, onError: (Object _) => false);
   }
 
   // Bước nhỏ và bài nhìn lại tuần: lưu trên máy, tách theo từng tài khoản.
   String _userContentKey(String uid) => 'moodi.user.$uid.v1';
 
   Future<void> _loadUserContent(String uid) async {
+    final revision = _sessionRevision;
     try {
       final raw = await _prefsStorage.read(key: _userContentKey(uid));
-      if (raw == null || _disposed || currentUserId != uid) return;
+      if (raw == null ||
+          _disposed ||
+          currentUserId != uid ||
+          revision != _sessionRevision) {
+        return;
+      }
       final data = jsonDecode(raw) as Map<String, dynamic>;
       final goals = (data['microGoals'] as List? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(MicroGoal.fromJson)
           .toList();
+      final history = data['weeklyReviewHistory'];
+      if (history is Map) {
+        for (final e in history.entries) {
+          if (e.value is Map) {
+            _weeklyReviewHistory[e.key.toString()] = (e.value as Map).map(
+              (k, v) => MapEntry(k.toString(), v.toString()),
+            );
+          }
+        }
+      }
       final review = data['weeklyReview'];
+      final savedReflections = data['reflections'];
+      if (savedReflections is Map) {
+        for (final e in savedReflections.entries) {
+          final entry = entryById(e.key.toString());
+          final inputs = data['reflectionInputs'] as Map?;
+          if (entry != null &&
+              inputs?[entry.id] == _reflectionInput(entry) &&
+              e.value is Map) {
+            _aiReflections.putIfAbsent(
+              e.key.toString(),
+              () => AIReflection.fromJson(Map<String, dynamic>.from(e.value)),
+            );
+          }
+        }
+      }
+      _unsentFeedback.addAll(
+        (data['unsentFeedback'] as List? ?? []).whereType<String>(),
+      );
       _microGoals
         ..clear()
         ..addAll(goals);
       _weeklyReview = review is Map
           ? review.map((k, v) => MapEntry(k.toString(), v.toString()))
           : null;
+      if (_weeklyReview != null) {
+        final date = DateTime.tryParse(_weeklyReview!['date'] ?? '');
+        if (date != null) {
+          final start = DateTime(date.year, date.month, date.day).subtract(Duration(days: date.weekday - 1));
+          _weeklyReviewHistory.putIfAbsent(start.toIso8601String(), () => Map.of(_weeklyReview!));
+        }
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('MindraState: load user content failed ($e)');
@@ -1291,25 +1811,56 @@ class MindraState extends ChangeNotifier {
 
   void _saveUserContent() {
     final uid = currentUserId;
+    final revision = _sessionRevision;
     if (uid == null) return;
-    unawaited(
-      _prefsStorage
-          .write(
-            key: _userContentKey(uid),
-            value: jsonEncode({
-              'microGoals': [
-                for (final g in _microGoals) {...g.toJson(), 'id': g.id},
-              ],
-              'weeklyReview': _weeklyReview,
-            }),
-          )
-          .catchError((Object e) => debugPrint('user content save failed: $e')),
-    );
+    final snapshot = jsonEncode({
+      'microGoals': [
+        for (final g in _microGoals) {...g.toJson(), 'id': g.id},
+      ],
+      'weeklyReview': _weeklyReview,
+      'weeklyReviewHistory': _weeklyReviewHistory,
+      'reflectionInputs': {for (final e in _entries) e.id: _reflectionInput(e)},
+      'reflections': {
+        for (final e in _aiReflections.entries) e.key: e.value.toJson(),
+      },
+      'unsentFeedback': _unsentFeedback.toList(),
+    });
+    _userContentQueue = _userContentQueue
+        .then(
+          (_) =>
+              _prefsStorage.write(key: _userContentKey(uid), value: snapshot),
+        )
+        .then((_) {
+          if (!_disposed && currentUserId == uid && revision == _sessionRevision) {
+            _userContentWriteFailed = false;
+          }
+        })
+        .catchError((Object e) {
+          if (!_disposed && currentUserId == uid && revision == _sessionRevision) {
+            _userContentWriteFailed = true;
+            notifyListeners();
+          }
+        });
   }
 
-  void setAppLockEnabled(bool val) {
+  Future<bool> setAppLockEnabled(bool val) async {
+    if (val == _appLockEnabled) return true;
+    final revision = _sessionRevision;
+    if (!await _deviceAuth.authenticate() ||
+        _disposed ||
+        revision != _sessionRevision) {
+      return false;
+    }
+    final previous = _appLockEnabled;
     _appLockEnabled = val;
+    _appUnlocked = true;
+    if (!await _savePreferences()) {
+      _appLockEnabled = previous;
+      notifyListeners();
+      return false;
+    }
     notifyListeners();
+    return true;
   }
 
   /// Đọc lại nhắc nhở đang lên lịch trong hệ điều hành (gọi khi mở app).
@@ -1330,7 +1881,11 @@ class MindraState extends ChangeNotifier {
         return false;
       }
     } else {
-      await _reminderService.cancel();
+      try {
+        await _reminderService.cancel();
+      } catch (_) {
+        return false;
+      }
     }
     _reminderEnabled = val;
     notifyListeners();
@@ -1338,10 +1893,17 @@ class MindraState extends ChangeNotifier {
   }
 
   Future<bool> setReminderTime(String val) async {
+    if (!RegExp(r'^([01]\d|2[0-3]):[0-5]\d$').hasMatch(val)) return false;
+    if (_reminderEnabled) {
+      try {
+        if (!await _reminderService.schedule(val)) return false;
+      } catch (_) {
+        return false;
+      }
+    }
     _reminderTime = val;
     notifyListeners();
-    if (!_reminderEnabled) return true;
-    return setReminderEnabled(true);
+    return true;
   }
 
   void toggleGoal(String goal) {
@@ -1367,16 +1929,65 @@ class MindraState extends ChangeNotifier {
       'nextWeek': nextWeek,
       'date': DateTime.now().toIso8601String(),
     };
+    final day = DateTime.now();
+    final start = DateTime(
+      day.year,
+      day.month,
+      day.day,
+    ).subtract(Duration(days: day.weekday - 1));
+    _weeklyReviewHistory[start.toIso8601String()] = Map.of(_weeklyReview!);
     notifyListeners();
     _saveUserContent();
   }
 
+  Map<String, dynamic> exportPersonalData() => {
+    'schemaVersion': 1,
+    'exportedAt': DateTime.now().toUtc().toIso8601String(),
+    'scope': 'personal-journal-garden-practice-and-local-preferences',
+    'entries': [
+      for (final e in _entries)
+        {...e.toJson(), 'id': e.id, 'syncStatus': entrySyncStatus(e.id).name},
+    ],
+    'reflections': {
+      for (final e in _aiReflections.entries) e.key: e.value.toJson(),
+    },
+    'gardenMoments': [
+      for (final m in _gardenMoments) {...m.toJson(), 'id': m.id},
+    ],
+    'practiceRecords': [for (final r in _practiceRecords) r.toJson()],
+    'microGoals': [
+      for (final g in _microGoals) {...g.toJson(), 'id': g.id},
+    ],
+    'weeklyReview': _weeklyReview,
+    'weeklyReviewHistory': _weeklyReviewHistory,
+    'preferences': {
+      'goals': userGoals,
+      'aiConsent': aiConsent,
+      'lowStimulation': lowStimulationMode,
+      'gardenPreview': gardenVisible,
+    },
+  };
+
   void clearAllData() {
     _entrySync.clear();
     _entryWriteVersions.clear();
+    _awaitingRemoteEntryIds.clear();
+    _remoteMisses.clear();
     _entries.clear();
     _gardenMoments.clear();
+    for (final id in {..._aiReflections.keys, ..._reflectionRequests.keys}) {
+      _reflectionVersions[id] = (_reflectionVersions[id] ?? 0) + 1;
+    }
+    _aiReflections.clear();
+    _unsentFeedback.clear();
+    _reflectionRequests.clear();
     _weeklyReview = null;
+    _weeklyReviewHistory.clear();
+    _microGoals.clear();
+    _practiceRecords.clear();
+    _pendingPracticeIds.clear();
+    _durableEntryIds.clear();
+    unawaited(_persistJournal());
     notifyListeners();
     _saveUserContent();
   }
@@ -1531,8 +2142,31 @@ class MindraState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _resetSessionUi() {
+    _hasChosenEmotion = false;
+    _selectedEmotionKey = 'happy';
+    _currentIntensity = 3;
+    _currentTab = 0;
+    _personalSpaceSection = 0;
+    _gardenFocusMonthKey = null;
+    _journalFocusDate = null;
+    _appUnlocked = false;
+    _aiConsent = false;
+    _loadingPersonalData = false;
+    _personalDataError = null;
+    _lastPersonalSync = null;
+    _cacheWriteFailed = false;
+    _durableEntryIds.clear();
+    _weeklyReviewHistory.clear();
+    _practiceRecords.clear();
+    _pendingPracticeIds.clear();
+  }
+
   Future<void> logout() async {
+    await _persistJournal();
+    await flushLocalData();
     await authRepository.signOut();
+    _resetSessionUi();
     _clearSharedSession();
     _entriesSubscription?.cancel();
     _gardenSubscription?.cancel();
@@ -1541,6 +2175,7 @@ class MindraState extends ChangeNotifier {
     _sharedGarden = null;
     _sharedMoments.clear();
     _aiReflections.clear();
+    _unsentFeedback.clear();
     _reflectionRequests.clear();
     _weeklyReview = null;
     _sessionRevision++;
@@ -1550,6 +2185,8 @@ class MindraState extends ChangeNotifier {
     _demoScenario = DemoScenario.firstLaunch;
     _entrySync.clear();
     _entryWriteVersions.clear();
+    _awaitingRemoteEntryIds.clear();
+    _remoteMisses.clear();
     _entries.clear();
     _gardenMoments.clear();
     _microGoals.clear();
@@ -1562,6 +2199,7 @@ class MindraState extends ChangeNotifier {
     _demoScenario = scenario;
     _currentTab = 0;
     _aiReflections.clear();
+    _unsentFeedback.clear();
     _reflectionRequests.clear();
     _gardenMoments.clear();
     _weeklyReview = null;
@@ -1608,6 +2246,8 @@ class MindraState extends ChangeNotifier {
   Future<AIReflection> fetchOrGenerateAIReflection(JournalEntry entry) {
     final cached = reflectionForEntry(entry.id);
     if (cached != null) return Future.value(cached);
+    if (!aiConsent)
+      return Future.error(StateError('Bạn chưa bật gợi ý phản tư.'));
     return _reflectionRequests[entry.id] ??= _generateReflection(entry);
   }
 
@@ -1619,6 +2259,10 @@ class MindraState extends ChangeNotifier {
         revision == _sessionRevision &&
         contentVersion == (_reflectionVersions[entry.id] ?? 0);
     try {
+      final pending = _pendingEntryWrites[entry.id];
+      if (pending != null) await Future.wait(List.of(pending));
+      if (!stillCurrent()) throw StateError('Ghi chép hoặc phiên đã thay đổi.');
+      if (!aiConsent) throw StateError('Gợi ý phản tư đã được tắt.');
       final generated = await _reflectionRepository.generateReflection(
         emotionKey: entry.emotionKey,
         intensity: entry.intensity,
@@ -1629,7 +2273,14 @@ class MindraState extends ChangeNotifier {
       if (!stillCurrent()) {
         throw StateError('Nhật ký hoặc phiên đăng nhập đã thay đổi.');
       }
+      final edited = _aiReflections[entry.id];
+      if (!generated.safetyFlag && edited?.userFeedback != null) {
+        final merged = edited!.copyWith(id: generated.id);
+        updateAIReflection(entry.id, merged);
+        return merged;
+      }
       cacheAIReflection(entry.id, generated);
+      _saveUserContent();
       notifyListeners();
       return generated;
     } finally {
@@ -1637,17 +2288,60 @@ class MindraState extends ChangeNotifier {
     }
   }
 
+  String _reflectionInput(JournalEntry e) => sha256
+      .convert(
+        utf8.encode(
+          jsonEncode([e.emotionKey, e.intensity, e.situation, e.thought]),
+        ),
+      )
+      .toString();
+
   Future<void> _loadSavedReflections(String userId) async {
+    final revision = _sessionRevision;
+    final versions = Map.of(_reflectionVersions);
     final saved = await _reflectionRepository.getReflectionsByEntry();
-    if (_disposed || currentUserId != userId || saved.isEmpty) return;
+    if (_disposed ||
+        currentUserId != userId ||
+        revision != _sessionRevision ||
+        saved.isEmpty) {
+      return;
+    }
     // Không ghi đè bản đang có trong phiên (có thể người dùng vừa sửa).
-    saved.forEach((entryId, r) => _aiReflections.putIfAbsent(entryId, () => r));
+    saved.forEach((entryId, r) {
+      if (entryById(entryId) != null &&
+          entrySyncStatus(entryId) == EntrySyncStatus.synced &&
+          versions[entryId] == _reflectionVersions[entryId]) {
+        _aiReflections.putIfAbsent(entryId, () => r);
+      }
+    });
     notifyListeners();
   }
 
   void _startApiListeners(String userId) {
-    unawaited(_loadUserContent(userId));
+    unawaited(_loadPersonalData(userId));
+  }
+
+  Future<void> _loadPersonalData(String userId) async {
+    final revision = _sessionRevision;
+    _loadingPersonalData = true;
+    final restored = _loadJournalCache(userId);
+    _restoringJournalCache = restored;
+    await restored;
+    if (identical(_restoringJournalCache, restored)) {
+      _restoringJournalCache = null;
+    }
+    if (_disposed || currentUserId != userId || revision != _sessionRevision) {
+      return;
+    }
+    await loadAiConsent();
+    if (_disposed || currentUserId != userId || revision != _sessionRevision) return;
+    await _loadUserContent(userId);
+    if (_disposed || currentUserId != userId || revision != _sessionRevision) {
+      return;
+    }
+    _resendFeedback();
     unawaited(_loadSavedReflections(userId));
+    unawaited(_refreshPractice(userId));
     _sharedGardenRepository.setCurrentUserId(userId);
     _watchUserGarden(userId);
     _entriesSubscription?.cancel();
@@ -1657,22 +2351,26 @@ class MindraState extends ChangeNotifier {
         .watchEntries(userId: userId)
         .listen(
           (remoteEntries) {
-            if (_disposed || currentUserId != userId) return;
-            final unsynced = _entries
-                .where((e) => entrySyncStatus(e.id) != EntrySyncStatus.synced)
-                .toList();
-            final localIds = unsynced.map((e) => e.id).toSet();
-            _entries
-              ..clear()
-              ..addAll(remoteEntries.where((e) => !localIds.contains(e.id)))
-              ..addAll(unsynced)
-              ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-            final today = _entryForDay(DateTime.now());
-            if (today != null) _selectedEmotionKey = today.emotionKey;
+            if (_disposed ||
+                currentUserId != userId ||
+                revision != _sessionRevision)
+              return;
+            _mergeRemoteEntries(remoteEntries);
+            _loadingPersonalData = false;
+            _personalDataError = null;
+            _lastPersonalSync = DateTime.now();
+            unawaited(_persistJournal());
+            retryEntrySync();
             notifyListeners();
           },
           onError: (e) {
-            debugPrint('MindraState: Error watching entries ($e)');
+            if (_disposed ||
+                currentUserId != userId ||
+                revision != _sessionRevision)
+              return;
+            _loadingPersonalData = false;
+            _personalDataError = 'Chưa tải được nhật ký mới nhất. Dữ liệu đã có trên máy vẫn được giữ.';
+            notifyListeners();
           },
         );
 
@@ -1680,14 +2378,24 @@ class MindraState extends ChangeNotifier {
         .watchMoments(userId: userId)
         .listen(
           (remoteMoments) {
-            if (_disposed || currentUserId != userId) return;
+            if (_disposed ||
+                currentUserId != userId ||
+                revision != _sessionRevision)
+              return;
             _gardenMoments
               ..clear()
               ..addAll(remoteMoments);
+            unawaited(_persistJournal());
             notifyListeners();
           },
           onError: (e) {
-            debugPrint('MindraState: Error watching moments ($e)');
+            if (_disposed ||
+                currentUserId != userId ||
+                revision != _sessionRevision)
+              return;
+            _personalDataError =
+                'Chưa cập nhật được khu vườn. Hãy thử lại khi có kết nối.';
+            notifyListeners();
           },
         );
   }
@@ -1711,26 +2419,30 @@ class MindraState extends ChangeNotifier {
     if (uid == null) return;
     try {
       final remoteEntries = await _journalRepository.fetchEntries(userId: uid);
-      if (_disposed || currentUserId != uid) return;
-      final unsynced = _entries
-          .where((e) => entrySyncStatus(e.id) != EntrySyncStatus.synced)
-          .toList();
-      final localIds = unsynced.map((e) => e.id).toSet();
-      _entries
-        ..clear()
-        ..addAll(remoteEntries.where((e) => !localIds.contains(e.id)))
-        ..addAll(unsynced)
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      if (_disposed || currentUserId != uid || revision != _sessionRevision)
+        return;
+      _mergeRemoteEntries(remoteEntries);
       final remoteMoments = await _gardenRepository.fetchMoments(userId: uid);
       if (_disposed || revision != _sessionRevision) return;
-      if (remoteMoments.isNotEmpty) {
-        _gardenMoments
-          ..clear()
-          ..addAll(remoteMoments);
-      }
+      _gardenMoments
+        ..clear()
+        ..addAll(remoteMoments);
+      _loadingPersonalData = false;
+      _personalDataError = null;
+      _lastPersonalSync = DateTime.now();
+      await _persistJournal();
+      unawaited(_refreshPractice(uid));
+      _resendFeedback();
+      retryEntrySync();
       notifyListeners();
     } catch (e) {
-      debugPrint('MindraState: Error in syncFromApi ($e)');
+      if (_disposed || currentUserId != uid || revision != _sessionRevision) {
+        return;
+      }
+      _loadingPersonalData = false;
+      _personalDataError =
+          'Chưa kết nối được. Dữ liệu đã lưu trên máy vẫn được giữ.';
+      notifyListeners();
     }
   }
 }

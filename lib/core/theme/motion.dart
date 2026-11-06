@@ -2,9 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class MindraMotion {
-  const MindraMotion(this.reduced);
+  const MindraMotion(this._reduced);
 
-  final bool reduced;
+  final bool _reduced;
+  bool get reduced {
+    if (_reduced) return true;
+    try {
+      return WidgetsBinding
+          .instance
+          .platformDispatcher
+          .accessibilityFeatures
+          .disableAnimations;
+    } catch (_) {
+      return false;
+    }
+  }
 
   factory MindraMotion.of(bool reduced) => MindraMotion(reduced);
 

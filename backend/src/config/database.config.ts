@@ -1,4 +1,6 @@
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { PracticeRecord } from '../practice/practice.entity';
+import { PasswordReset } from '../auth/password-reset.entity';
 import { User } from '../users/entities/user.entity';
 import { StorageFile } from '../storage/entities/storage-file.entity';
 import { Notification } from '../notifications/entities/notification.entity';
@@ -31,6 +33,8 @@ export const databaseConfig = (): TypeOrmModuleOptions => ({
     SharedMoment,
     SharedMomentCare,
     AiReflection,
+    PracticeRecord,
+    PasswordReset,
     ...COMMUNITY_ENTITIES,
   ],
   synchronize: process.env.NODE_ENV !== 'production',

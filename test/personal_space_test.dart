@@ -10,7 +10,8 @@ Widget _host(MindraState state) {
     home: Scaffold(
       body: ListenableBuilder(
         listenable: state,
-        builder: (_, _) => PersonalSpaceView(state: state, onOpenCheckin: () {}),
+        builder: (_, _) =>
+            PersonalSpaceView(state: state, onOpenCheckin: () {}),
       ),
     ),
   );
@@ -70,9 +71,7 @@ void main() {
     expect(find.text('Tháng ${lastMonth.month} của bạn'), findsOneWidget);
   });
 
-  testWidgets('Journal cannot move into or select future days', (
-    tester,
-  ) async {
+  testWidgets('Journal cannot move into or select future days', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final now = DateTime.now();
@@ -84,7 +83,10 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.chevron_right_rounded));
     await tester.pumpAndSettle();
-    expect(find.textContaining('THÁNG ${now.month}\u2002', findRichText: true), findsOneWidget);
+    expect(
+      find.textContaining('THÁNG ${now.month}\u2002', findRichText: true),
+      findsOneWidget,
+    );
 
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
     if (tomorrow.month == now.month) {

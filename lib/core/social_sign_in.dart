@@ -33,14 +33,12 @@ class SocialSignIn {
   // không phải bí mật. Reversed ID tương ứng đã khai báo trong Info.plist.
   static const googleIosClientId = String.fromEnvironment(
     'GOOGLE_IOS_CLIENT_ID',
-    defaultValue:
-        '1017414745880-gg3005b3ngf3a2el8oam9dm1s3i3spf2.apps.googleusercontent.com',
+    defaultValue: '1017414745880-gg3005b3ngf3a2el8oam9dm1s3i3spf2.apps.googleusercontent.com',
   );
   // Web client ID (client_type 3 trong google-services.json).
   static const googleServerClientId = String.fromEnvironment(
     'GOOGLE_SERVER_CLIENT_ID',
-    defaultValue:
-        '1017414745880-1900dn539ep4kg24g9d4v5oe4eroh2p7.apps.googleusercontent.com',
+    defaultValue: '1017414745880-1900dn539ep4kg24g9d4v5oe4eroh2p7.apps.googleusercontent.com',
   );
   static const appleEnabled = bool.fromEnvironment('APPLE_SIGN_IN');
 
@@ -137,9 +135,8 @@ class SocialSignIn {
 
   static String _randomNonce() {
     final random = Random.secure();
-    return base64UrlEncode(
-      List<int>.generate(32, (_) => random.nextInt(256)),
-    ).replaceAll('=', '');
+    return base64UrlEncode(List<int>.generate(32, (_) => random.nextInt(256)))
+        .replaceAll('=', '');
   }
 
   static String _sha256(String value) =>

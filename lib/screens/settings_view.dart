@@ -36,6 +36,7 @@ class SettingsView extends StatelessWidget {
           Text('CÀI ĐẶT & BẢO MẬT', style: AppTypography.kicker),
           const SizedBox(height: 8),
           RichText(
+            textScaler: MediaQuery.textScalerOf(context),
             text: TextSpan(
               style: AppTypography.displayMedium.copyWith(fontSize: 34),
               children: [
@@ -44,7 +45,7 @@ class SettingsView extends StatelessWidget {
                   text: 'do bạn làm chủ.',
                   style: TextStyle(
                     fontStyle: FontStyle.italic,
-                    color: AppColors.orange,
+                    color: AppColors.orangeText,
                   ),
                 ),
               ],
@@ -94,7 +95,7 @@ class SettingsView extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Moodi chưa được phép gửi thông báo. Hãy bật quyền trong Cài đặt của máy.',
+            'Chưa thay đổi được lịch nhắc. Hãy kiểm tra quyền thông báo và thử lại.',
           ),
         ),
       );
@@ -139,7 +140,7 @@ class SettingsView extends StatelessWidget {
               state.reminderTime,
               style: AppTypography.bodyMedium.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppColors.orange,
+                color: AppColors.orangeText,
               ),
             ),
             onTap: () async {
@@ -201,7 +202,9 @@ class SettingsView extends StatelessWidget {
         ? 'Đang đồng bộ…'
         : state.sessionEntryCount > 0
         ? 'Có ghi chép chưa được lưu lâu dài'
-        : 'Đã đồng bộ với tài khoản';
+        : state.lastPersonalSync == null
+        ? 'Chưa xác nhận cập nhật dữ liệu tài khoản'
+        : 'Đã đồng bộ các ghi chép';
     return _buildSectionCard(
       title: 'TÀI KHOẢN & BẢO VỆ',
       icon: Icons.account_circle_outlined,
@@ -423,26 +426,32 @@ class SettingsView extends StatelessWidget {
             state.setAiConsent(val);
           },
         ),
-        // Demo PIN only; hidden from release builds until real Face ID/PIN.
-        if (kDebugMode) ...[
+        ...[
           const Divider(height: 20),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             activeTrackColor: AppColors.ink,
             title: Text(
-              'Khóa ứng dụng (bản thử nghiệm)',
+              'Khóa ứng dụng',
               style: AppTypography.bodyMedium.copyWith(
                 fontWeight: FontWeight.w600,
               ),
             ),
             subtitle: Text(
-              'Hiện màn khóa PIN demo 0000 khi mở app. Chưa dùng Face ID thật.',
+              'Dùng Face ID, vân tay hoặc mã khóa thiết bị. Khóa lại khi ứng dụng vào nền.',
               style: AppTypography.caption.copyWith(color: AppColors.textMuted),
             ),
             value: state.appLockEnabled,
-            onChanged: (val) {
-              MindraMotion.of(state.lowStimulationMode).selection();
-              state.setAppLockEnabled(val);
+            onChanged: (val) async {
+              if (!await state.setAppLockEnabled(val) && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Chưa thay đổi khóa ứng dụng. Hãy kiểm tra mã khóa hoặc sinh trắc học trong cài đặt thiết bị.',
+                    ),
+                  ),
+                );
+              }
             },
           ),
         ],
@@ -471,13 +480,13 @@ class SettingsView extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           activeTrackColor: AppColors.ink,
           title: Text(
-            'Hiển thị Khu vườn Moodi',
+            'Hiện khu vườn trên Hôm nay',
             style: AppTypography.bodyMedium.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
           subtitle: Text(
-            'Lớp hình ảnh riêng tư origami phát triển theo nhịp ghé thăm',
+            'Ẩn hoặc hiện bản xem trước. Bạn vẫn có thể mở vườn trong Góc riêng.',
             style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),
           value: state.gardenVisible,
@@ -579,14 +588,16 @@ class SettingsView extends StatelessWidget {
               const Icon(
                 Icons.favorite_rounded,
                 size: 20,
-                color: AppColors.orange,
+                color: AppColors.orangeText,
               ),
               const SizedBox(width: 8),
-              Text(
-                'HỖ TRỢ AN TOÀN & KHỦNG HOẢNG',
-                style: AppTypography.kicker.copyWith(
-                  color: AppColors.orange,
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Text(
+                  'HỖ TRỢ AN TOÀN & KHỦNG HOẢNG',
+                  style: AppTypography.kicker.copyWith(
+                    color: AppColors.orangeText,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -630,7 +641,7 @@ class SettingsView extends StatelessWidget {
                 children: [
                   Icon(icon, size: 18, color: AppColors.ink),
                   const SizedBox(width: 8),
-                  Text(title, style: AppTypography.kicker),
+                  Expanded(child: Text(title, style: AppTypography.kicker)),
                 ],
               ),
               const SizedBox(height: 14),
@@ -643,44 +654,37 @@ class SettingsView extends StatelessWidget {
   }
 
   // Xuất dữ liệu
-  void _exportData(BuildContext context) {
+  Future<void> _exportData(BuildContext context) async {
     MindraMotion.of(state.lowStimulationMode).selection();
-    final dataList = state.entries
-        .map(
-          (e) => {
-            'id': e.id,
-            'timestamp': e.timestamp.toIso8601String(),
-            'emotionKey': e.emotionKey,
-            'intensity': e.intensity,
-            'trigger': e.trigger,
-            'situation': e.situation,
-            'thought': e.thought,
-            'response': e.response,
-            'exerciseDone': e.exerciseDone,
-            'afterIntensity': e.afterIntensity,
-          },
-        )
-        .toList();
-
-    final jsonStr = const JsonEncoder.withIndent('  ').convert(dataList);
+    final jsonStr = const JsonEncoder.withIndent('  ')
+        .convert(state.exportPersonalData());
     final box = context.findRenderObject() as RenderBox?;
     final date = DateTime.now().toIso8601String().substring(0, 10);
-    // Share sheet instead of clipboard: other apps can read the clipboard.
-    SharePlus.instance.share(
-      ShareParams(
-        files: [
-          XFile.fromData(
-            Uint8List.fromList(utf8.encode(jsonStr)),
-            mimeType: 'application/json',
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode(jsonStr)),
+              mimeType: 'application/json',
+            ),
+          ],
+          fileNameOverrides: ['moodi-du-lieu-ca-nhan-$date.json'],
+          subject: 'Dữ liệu cá nhân Moodi',
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Chưa xuất được dữ liệu. Hãy thử chia sẻ lại.'),
           ),
-        ],
-        fileNameOverrides: ['moodi-nhat-ky-$date.json'],
-        subject: 'Nhật ký Moodi',
-        sharePositionOrigin: box == null
-            ? null
-            : box.localToGlobal(Offset.zero) & box.size,
-      ),
-    );
+        );
+      }
+    }
   }
 
   // Xóa toàn bộ dữ liệu
@@ -691,14 +695,14 @@ class SettingsView extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(
-          'Xóa nhật ký và hoa?',
+          'Xóa nhật ký, hoa và lịch sử thực hành?',
           style: AppTypography.titleMedium.copyWith(
             fontWeight: FontWeight.w700,
             color: Colors.red.shade700,
           ),
         ),
         content: Text(
-          'Hành động này sẽ xóa vĩnh viễn mọi ghi chép cảm xúc và hoa trong vườn của bạn khỏi tài khoản và thiết bị. Những bông hoa bạn đã gửi vào vườn sẻ chia hiện tại cũng được gỡ. Bài cộng đồng và tin nhắn không thuộc thao tác này. Không thể hoàn tác.',
+          'Hành động này sẽ xóa vĩnh viễn mọi ghi chép cảm xúc, phản tư, lịch sử thực hành, bước nhỏ, bài nhìn lại tuần và hoa trong vườn của bạn khỏi tài khoản và thiết bị. Những bông hoa bạn đã gửi vào vườn sẻ chia hiện tại cũng được gỡ. Bài cộng đồng và tin nhắn không thuộc thao tác này. Không thể hoàn tác.',
           style: AppTypography.bodySmall,
         ),
         actions: [
@@ -722,19 +726,19 @@ class SettingsView extends StatelessWidget {
               final messenger = ScaffoldMessenger.of(context);
               try {
                 await state.deleteAllUserData();
-              } catch (_) {
+              } catch (error) {
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Chưa xóa được dữ liệu. Kiểm tra kết nối và thử lại.',
-                    ),
+                  SnackBar(
+                    content: Text(error is StateError ? error.message.toString() : 'Chưa xóa được dữ liệu. Kiểm tra kết nối và thử lại.'),
                   ),
                 );
                 return;
               }
               messenger.showSnackBar(
                 SnackBar(
-                  content: const Text('Đã xóa nhật ký và hoa của bạn'),
+                  content: const Text(
+                    'Đã xóa nhật ký, phản tư, thực hành và hoa của bạn',
+                  ),
                   backgroundColor: AppColors.ink,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(

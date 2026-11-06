@@ -130,7 +130,7 @@ const SCHEMAS: Record<string, string[]> = {
   reportImage: ["reportId"],
   moderate: ["reportId", "kind"],
   notifications: [],
-  markNotificationsRead: [],
+  markNotificationsRead: ["notificationId"],
 };
 const MUTATIONS = new Set([
   "saveProfile",
@@ -195,6 +195,7 @@ export function validateRequest(d: unknown): Json {
     "target",
     "messageId",
     "reportId",
+    "notificationId",
     "author",
   ]) {
     if (data[k] !== undefined) id(data[k]);
@@ -681,11 +682,9 @@ export class CommunityService {
           break;
         }
         case "markNotificationsRead": {
-          await qb(Notification)
-            .update()
-            .set({ isRead: true })
-            .where("recipientId = :uid AND isRead = false", { uid })
-            .execute();
+          const query = qb(Notification).update().set({ isRead: true }).where("recipientId = :uid AND isRead = false", { uid });
+          if (d.notificationId) query.andWhere('id = :id', { id: d.notificationId });
+          await query.execute();
           break;
         }
         case "search": {
