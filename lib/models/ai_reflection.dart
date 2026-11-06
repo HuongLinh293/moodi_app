@@ -14,6 +14,10 @@ class AIReflection {
   final String? userFeedback;
   final bool recommendationsDismissed;
 
+  /// Nguồn gợi ý: 'ai' (Gemini), 'template' (mẫu ở server), 'safety', hoặc
+  /// 'local' (mẫu trong app khi không kết nối được server).
+  final String source;
+
   const AIReflection({
     required this.possibleEmotions,
     required this.possibleTrigger,
@@ -27,6 +31,7 @@ class AIReflection {
     this.safetyReason,
     this.userFeedback,
     this.recommendationsDismissed = false,
+    this.source = 'local',
   });
 
   AIReflection copyWith({
@@ -57,6 +62,7 @@ class AIReflection {
       userFeedback: userFeedback ?? this.userFeedback,
       recommendationsDismissed:
           recommendationsDismissed ?? this.recommendationsDismissed,
+      source: source,
     );
   }
 
@@ -187,6 +193,7 @@ class AIReflection {
       'safetyReason': safetyReason,
       'userFeedback': userFeedback,
       'recommendationsDismissed': recommendationsDismissed,
+      'source': source,
     };
   }
 
@@ -212,6 +219,7 @@ class AIReflection {
       userFeedback: data['userFeedback'] as String?,
       recommendationsDismissed:
           data['recommendationsDismissed'] as bool? ?? false,
+      source: data['source'] as String? ?? 'template',
     );
   }
 

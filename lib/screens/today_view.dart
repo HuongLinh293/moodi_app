@@ -40,7 +40,7 @@ class TodayView extends StatelessWidget {
     final selectedEmotion = state.selectedEmotion;
     final awaitingChoice = !state.hasChosenEmotion;
     final toneColor = awaitingChoice ? AppColors.cream : selectedEmotion.tone;
-    final isDarkTone = toneColor.computeLuminance() < 0.42;
+    final isDarkTone = AppColors.prefersLightText(toneColor);
     final contentTextColor = isDarkTone ? Colors.white : AppColors.ink;
     // Khung check-in: Màu nền đậm hơn, màu icon nhạt hơn cùng 1 tone màu (như Bình yên)
     final facePaletteColors =

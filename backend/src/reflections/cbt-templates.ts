@@ -90,7 +90,8 @@ const stripVietnamese = (value: string) =>
 
 /** Phát hiện tín hiệu khủng hoảng, kể cả khi người dùng gõ không dấu. */
 export function hasCrisisSignal(...texts: string[]): boolean {
-  const lower = texts.join(' ').toLowerCase();
+  // NFC: văn bản dạng tổ hợp rời (NFD) vẫn khớp danh sách có dấu.
+  const lower = texts.join(' ').normalize('NFC').toLowerCase();
   if (CRISIS_KEYWORDS.some((keyword) => lower.includes(keyword))) return true;
   // So khớp theo ranh giới từ để "cat tay" không khớp giữa một từ dài hơn.
   const plain = ` ${stripVietnamese(lower).replace(/[^a-z0-9]+/g, ' ')} `;

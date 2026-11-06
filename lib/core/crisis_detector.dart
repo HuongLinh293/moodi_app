@@ -1,6 +1,9 @@
 /// Phát hiện tín hiệu khủng hoảng trong văn bản người dùng viết.
 ///
 /// Giữ khớp với `hasCrisisSignal` ở backend (reflections/cbt-templates.ts).
+/// Giới hạn đã biết: Dart không có chuẩn hóa NFC, nên các cụm chỉ có trong
+/// danh sách có dấu (vd. "tự tử") viết ở dạng tổ hợp rời sẽ không được nhận
+/// ra; bàn phím iOS/Android luôn nhập dạng dựng sẵn nên hiếm gặp.
 library;
 
 const crisisKeywords = [
@@ -52,15 +55,19 @@ const _accents = {
   'd': 'đ',
 };
 
+/// Bảng tra ký tự có dấu (dạng dựng sẵn) → chữ gốc, mỗi ký tự tra một lần.
+final Map<int, String> _baseOf = {
+  for (final entry in _accents.entries)
+    for (final rune in entry.value.runes) rune: entry.key,
+};
+
 String _stripVietnamese(String value) {
   final buffer = StringBuffer();
   for (final rune in value.runes) {
-    final char = String.fromCharCode(rune);
-    final base = _accents.entries
-        .where((e) => e.value.contains(char))
-        .map((e) => e.key)
-        .firstOrNull;
-    buffer.write(base ?? char);
+    // Dấu tổ hợp rời (văn bản dạng NFD, ví dụ dán từ macOS): bỏ đi, giống
+    // normalize('NFD') + xóa dấu ở backend.
+    if (rune >= 0x0300 && rune <= 0x036F) continue;
+    buffer.write(_baseOf[rune] ?? String.fromCharCode(rune));
   }
   return buffer.toString();
 }

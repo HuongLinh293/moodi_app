@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -202,7 +203,10 @@ class MindraState extends ChangeNotifier {
     _restoringSession = true;
     try {
       final restored = await _authRepository.restoreSession();
-      if (restored && !_disposed) _onboardingCompleted = true;
+      if (restored && !_disposed) {
+        _onboardingCompleted = true;
+        _savePreferences();
+      }
     } catch (e) {
       debugPrint('MindraState: restoreSession failed ($e)');
     } finally {
@@ -1069,7 +1073,10 @@ class MindraState extends ChangeNotifier {
     }
   }
 
-  void completeExercise({
+  /// Ghi nhận bài thực hành vào check-in hôm nay và đồng bộ lên server.
+  /// Trả false khi không có cảm xúc nào do người dùng chọn để gắn vào: Moodi
+  /// không tự tạo check-in với cảm xúc người dùng chưa chọn.
+  bool completeExercise({
     required String exerciseId,
     String note = '',
     String? afterEmotionKey,
@@ -1079,31 +1086,39 @@ class MindraState extends ChangeNotifier {
     String? repeatPreference,
   }) {
     final today = _entryForDay(DateTime.now());
+    final trimmed = note.trim();
     if (today != null) {
-      final index = _entries.indexWhere((entry) => entry.id == today.id);
-      if (index != -1) {
-        _entries[index] = today.copyWith(
+      // Ghi chú bài tập nối vào "phản ứng"; giữ nguyên suy nghĩ người dùng viết.
+      final response = trimmed.isEmpty || today.response.contains(trimmed)
+          ? today.response
+          : (today.response.isEmpty ? trimmed : '${today.response}\n$trimmed');
+      updateEntry(
+        today.copyWith(
           exerciseId: exerciseId,
           exerciseDone: true,
-          thought: note.isNotEmpty ? note : today.thought,
-          afterEmotionKey: afterEmotionKey,
-          afterIntensity: afterIntensity,
-          usefulnessRating: usefulnessRating,
-          easeRating: easeRating,
-          repeatPreference: repeatPreference,
-        );
-        notifyListeners();
-        return;
-      }
+          response: response,
+          afterEmotionKey: afterEmotionKey ?? today.afterEmotionKey,
+          afterIntensity: afterIntensity ?? today.afterIntensity,
+          usefulnessRating: usefulnessRating ?? today.usefulnessRating,
+          easeRating: easeRating ?? today.easeRating,
+          repeatPreference: repeatPreference ?? today.repeatPreference,
+        ),
+      );
+      return true;
     }
 
+    // Chưa check-in hôm nay: chỉ tạo khi có cảm xúc do người dùng chọn
+    // (cảm xúc sau bài tập, hoặc cảm xúc vừa chọn trên màn Hôm nay).
+    final emotionKey =
+        afterEmotionKey ?? (_hasChosenEmotion ? _selectedEmotionKey : null);
+    if (emotionKey == null) return false;
     addEntry(
       JournalEntry(
         id: 'entry-${DateTime.now().millisecondsSinceEpoch}',
         timestamp: DateTime.now(),
-        emotionKey: _selectedEmotionKey,
-        intensity: _currentIntensity,
-        thought: note,
+        emotionKey: emotionKey,
+        intensity: afterIntensity ?? _currentIntensity,
+        response: trimmed,
         exerciseId: exerciseId,
         exerciseDone: true,
         afterEmotionKey: afterEmotionKey,
@@ -1113,6 +1128,7 @@ class MindraState extends ChangeNotifier {
         repeatPreference: repeatPreference,
       ),
     );
+    return true;
   }
 
   void saveCurrentCheckin({String? note}) {
@@ -1190,11 +1206,105 @@ class MindraState extends ChangeNotifier {
   void setLowStimulationMode(bool val) {
     _lowStimulationMode = val;
     notifyListeners();
+    _savePreferences();
   }
 
   void setGardenVisible(bool val) {
     _gardenVisible = val;
     notifyListeners();
+    _savePreferences();
+  }
+
+  // Cài đặt trên máy (không theo tài khoản): onboarding, mục tiêu, giảm kích
+  // thích, hiển thị vườn. Lưu trong Keychain/Keystore như token phiên.
+  static const _preferencesKey = 'moodi.preferences.v1';
+  bool _loadingPreferences = false;
+
+  /// Đang đọc cài đặt hoặc khôi phục phiên: chưa biết nên mở màn nào.
+  bool get startingUp => _restoringSession || _loadingPreferences;
+
+  Future<void> loadLocalPreferences() async {
+    _loadingPreferences = true;
+    try {
+      await loadAiConsent();
+      final raw = await _prefsStorage.read(key: _preferencesKey);
+      if (raw == null || _disposed) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      if (data['onboardingCompleted'] == true) _onboardingCompleted = true;
+      _lowStimulationMode =
+          data['lowStimulation'] as bool? ?? _lowStimulationMode;
+      _gardenVisible = data['gardenVisible'] as bool? ?? _gardenVisible;
+      final goals = (data['goals'] as List?)?.whereType<String>().toList();
+      if (goals != null && goals.isNotEmpty) {
+        _userGoals
+          ..clear()
+          ..addAll(goals);
+      }
+    } catch (e) {
+      debugPrint('MindraState: load preferences failed ($e)');
+    } finally {
+      _loadingPreferences = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  void _savePreferences() {
+    unawaited(
+      _prefsStorage
+          .write(
+            key: _preferencesKey,
+            value: jsonEncode({
+              'onboardingCompleted': _onboardingCompleted,
+              'lowStimulation': _lowStimulationMode,
+              'gardenVisible': _gardenVisible,
+              'goals': _userGoals,
+            }),
+          )
+          .catchError((Object e) => debugPrint('preferences save failed: $e')),
+    );
+  }
+
+  // Bước nhỏ và bài nhìn lại tuần: lưu trên máy, tách theo từng tài khoản.
+  String _userContentKey(String uid) => 'moodi.user.$uid.v1';
+
+  Future<void> _loadUserContent(String uid) async {
+    try {
+      final raw = await _prefsStorage.read(key: _userContentKey(uid));
+      if (raw == null || _disposed || currentUserId != uid) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final goals = (data['microGoals'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(MicroGoal.fromJson)
+          .toList();
+      final review = data['weeklyReview'];
+      _microGoals
+        ..clear()
+        ..addAll(goals);
+      _weeklyReview = review is Map
+          ? review.map((k, v) => MapEntry(k.toString(), v.toString()))
+          : null;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('MindraState: load user content failed ($e)');
+    }
+  }
+
+  void _saveUserContent() {
+    final uid = currentUserId;
+    if (uid == null) return;
+    unawaited(
+      _prefsStorage
+          .write(
+            key: _userContentKey(uid),
+            value: jsonEncode({
+              'microGoals': [
+                for (final g in _microGoals) {...g.toJson(), 'id': g.id},
+              ],
+              'weeklyReview': _weeklyReview,
+            }),
+          )
+          .catchError((Object e) => debugPrint('user content save failed: $e')),
+    );
   }
 
   void setAppLockEnabled(bool val) {
@@ -1243,6 +1353,7 @@ class MindraState extends ChangeNotifier {
       _userGoals.add(goal);
     }
     notifyListeners();
+    _savePreferences();
   }
 
   void saveWeeklyReview({
@@ -1257,6 +1368,7 @@ class MindraState extends ChangeNotifier {
       'date': DateTime.now().toIso8601String(),
     };
     notifyListeners();
+    _saveUserContent();
   }
 
   void clearAllData() {
@@ -1266,6 +1378,7 @@ class MindraState extends ChangeNotifier {
     _gardenMoments.clear();
     _weeklyReview = null;
     notifyListeners();
+    _saveUserContent();
   }
 
   // Onboarding (S01–S04)
@@ -1275,11 +1388,13 @@ class MindraState extends ChangeNotifier {
   void completeOnboarding() {
     _onboardingCompleted = true;
     notifyListeners();
+    _savePreferences();
   }
 
   void resetOnboarding() {
     _onboardingCompleted = false;
     notifyListeners();
+    _savePreferences();
   }
 
   // Micro-Goals (S11, S11-G)
@@ -1297,6 +1412,7 @@ class MindraState extends ChangeNotifier {
       ),
     );
     notifyListeners();
+    _saveUserContent();
   }
 
   void updateMicroGoalFollowUp(
@@ -1311,6 +1427,7 @@ class MindraState extends ChangeNotifier {
         followUpNote: note,
       );
       notifyListeners();
+      _saveUserContent();
     }
   }
 
@@ -1429,6 +1546,7 @@ class MindraState extends ChangeNotifier {
     _sessionRevision++;
     _isAuthenticated = false;
     _onboardingCompleted = true;
+    _savePreferences();
     _demoScenario = DemoScenario.firstLaunch;
     _entrySync.clear();
     _entryWriteVersions.clear();
@@ -1519,7 +1637,17 @@ class MindraState extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadSavedReflections(String userId) async {
+    final saved = await _reflectionRepository.getReflectionsByEntry();
+    if (_disposed || currentUserId != userId || saved.isEmpty) return;
+    // Không ghi đè bản đang có trong phiên (có thể người dùng vừa sửa).
+    saved.forEach((entryId, r) => _aiReflections.putIfAbsent(entryId, () => r));
+    notifyListeners();
+  }
+
   void _startApiListeners(String userId) {
+    unawaited(_loadUserContent(userId));
+    unawaited(_loadSavedReflections(userId));
     _sharedGardenRepository.setCurrentUserId(userId);
     _watchUserGarden(userId);
     _entriesSubscription?.cancel();

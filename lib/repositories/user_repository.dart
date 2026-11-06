@@ -60,35 +60,6 @@ class UserProfile {
   }
 }
 
-/// Represents user statistics
-class UserStats {
-  final String id;
-  final String username;
-  final int postsCount;
-  final int friendsCount;
-  final DateTime joinedAt;
-
-  UserStats({
-    required this.id,
-    required this.username,
-    required this.postsCount,
-    required this.friendsCount,
-    required this.joinedAt,
-  });
-
-  factory UserStats.fromJson(Map<String, dynamic> json) {
-    return UserStats(
-      id: json['id'] as String? ?? '',
-      username: json['username'] as String? ?? '',
-      postsCount: json['postsCount'] as int? ?? 0,
-      friendsCount: json['friendsCount'] as int? ?? 0,
-      joinedAt: DateTime.parse(
-        json['joinedAt'] as String? ?? DateTime.now().toIso8601String(),
-      ),
-    );
-  }
-}
-
 class UserRepository {
   final HttpClient _httpClient;
 
@@ -168,20 +139,6 @@ class UserRepository {
     } catch (e) {
       debugPrint('UserRepository: updateAvatar error: $e');
       rethrow;
-    }
-    return null;
-  }
-
-  /// Get user statistics
-  Future<UserStats?> getUserStats(String userId) async {
-    try {
-      final response = await _httpClient.get(ApiConfig.userStats(userId));
-
-      if (response is Map<String, dynamic>) {
-        return UserStats.fromJson(response);
-      }
-    } catch (e) {
-      debugPrint('UserRepository: getUserStats error: $e');
     }
     return null;
   }

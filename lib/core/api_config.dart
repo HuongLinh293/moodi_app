@@ -37,7 +37,6 @@ class ApiConfig {
   static const String usersEndpoint = '/users';
   static String userById(String id) => '$usersEndpoint/$id';
   static const String userSearchEndpoint = '$usersEndpoint/search';
-  static String userStats(String id) => '$usersEndpoint/$id/stats';
   static String userAvatar(String id) => '$usersEndpoint/$id/avatar';
 
   static const String storageEndpoint = '/storage';

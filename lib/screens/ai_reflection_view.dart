@@ -751,11 +751,17 @@ class _AIReflectionViewState extends State<AIReflectionView>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
                 child: Text(
-                  'Gợi ý từ mẫu có sẵn, không phải phân tích AI cá nhân. Chỉ giữ điều phù hợp với bạn.',
-                  style: TextStyle(color: AppColors.textSecondary, height: 1.5),
+                  // Nói đúng nguồn: AI chỉ dùng khi server gọi được Gemini.
+                  _reflection.source == 'ai'
+                      ? 'Gợi ý do AI (Google Gemini) tạo từ những gì bạn viết, không phải chẩn đoán. Chỉ giữ điều phù hợp với bạn.'
+                      : 'Gợi ý từ mẫu có sẵn, không phải phân tích AI cá nhân. Chỉ giữ điều phù hợp với bạn.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
                 ),
               ),
               // Emotion tags

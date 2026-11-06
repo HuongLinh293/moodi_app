@@ -20,6 +20,11 @@ describe('hasCrisisSignal', () => {
     '',
   ])('does not flag %p', (text) => expect(hasCrisisSignal(text)).toBe(false));
 
+  it('flags decomposed (NFD) text, including accent-only phrases', () => {
+    expect(hasCrisisSignal('muốn chết'.normalize('NFD'))).toBe(true);
+    expect(hasCrisisSignal('tự tử'.normalize('NFD'))).toBe(true);
+  });
+
   it('checks every text passed in', () => {
     expect(hasCrisisSignal('Hôm nay mệt', 'muon chet')).toBe(true);
   });

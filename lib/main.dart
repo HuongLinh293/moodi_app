@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import 'core/theme/colors.dart';
 import 'core/theme/theme.dart';
+import 'core/theme/typography.dart';
 import 'state/mindra_state.dart';
 import 'screens/app_lock_view.dart';
 import 'screens/home_shell.dart';
@@ -41,7 +43,10 @@ class _MindraAppState extends State<MindraApp> {
     final appContent = Consumer<MindraState>(
       builder: (context, state, _) {
         Widget home;
-        if (!state.onboardingCompleted) {
+        if (state.startingUp && !state.isAuthenticated) {
+          // Đang đọc cài đặt / khôi phục phiên: chờ thay vì chớp onboarding.
+          home = const _StartupSplash();
+        } else if (!state.onboardingCompleted) {
           home = const OnboardingView();
         } else if (!state.isAuthenticated) {
           // Onboarding xong nhưng chưa đăng nhập (sau logout hoặc fresh install)
@@ -77,8 +82,29 @@ class _MindraAppState extends State<MindraApp> {
     return ChangeNotifierProvider<MindraState>(
       create: (_) => MindraState()
         ..loadReminder()
-        ..loadAiConsent(),
+        ..loadLocalPreferences(),
       child: appContent,
     );
   }
+}
+
+class _StartupSplash extends StatelessWidget {
+  const _StartupSplash();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.paper,
+    body: Center(
+      // Tĩnh, không hoạt ảnh: thường chỉ hiện trong chốc lát khi mở app.
+      child: Semantics(
+        label: 'Đang mở Moodi',
+        child: Text(
+          'moodi',
+          style: AppTypography.headlineMedium.copyWith(
+            color: AppColors.textMuted,
+          ),
+        ),
+      ),
+    ),
+  );
 }

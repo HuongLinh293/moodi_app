@@ -23,6 +23,15 @@ String formatCommunityHandle(String value) {
   ].join(' ');
 }
 
+/// Server không cho biết ai đã chặn ai, chỉ cho biết còn tương tác được không.
+/// Bản server cũ không có `canInteract` thì suy ra từ `blockedBy`.
+bool canInteractWith(Json? relation) =>
+    relation?['canInteract'] as bool? ??
+    (relation?['blockedBy'] as List? ?? []).isEmpty;
+
+bool iBlocked(Json? relation, String? uid) =>
+    (relation?['blockedBy'] as List? ?? []).contains(uid);
+
 class _FriendCodeCard extends StatelessWidget {
   const _FriendCodeCard({required this.handle});
   final String handle;
@@ -141,7 +150,8 @@ class _CommunityProfilePageState extends State<CommunityProfilePage> {
   Widget build(BuildContext context) {
     final p = data == null ? null : json(data!['profile']);
     final r = data?['relation'] == null ? null : json(data!['relation']);
-    final blocked = (r?['blockedBy'] as List? ?? []);
+    final interact = canInteractWith(r);
+    final blockedByMe = iBlocked(r, widget.repo.uid);
     final own = widget.target == widget.repo.uid;
     Widget button(String label, String kind) => OutlinedButton(
       onPressed: busy ? null : () => action(kind),
@@ -220,19 +230,21 @@ class _CommunityProfilePageState extends State<CommunityProfilePage> {
                       child: const Text('Sửa hồ sơ'),
                     ),
                   if (!own) ...[
-                    if (blocked.isEmpty && r?['status'] == 'none')
+                    if (interact && r?['status'] == 'none')
                       button('Kết bạn', 'request'),
-                    if (blocked.isEmpty &&
+                    if (interact &&
                         r?['status'] == 'pending' &&
                         r?['requestedBy'] == widget.repo.uid)
                       button('Hủy lời mời', 'cancel'),
-                    if (blocked.isEmpty &&
+                    if (interact &&
                         r?['status'] == 'pending' &&
                         r?['requestedBy'] != widget.repo.uid) ...[
                       button('Chấp nhận kết bạn', 'accept'),
                       button('Từ chối', 'decline'),
                     ],
-                    if (r?['status'] == 'accepted' || r?['hasMessages'] == true)
+                    if (interact &&
+                        (r?['status'] == 'accepted' ||
+                            r?['hasMessages'] == true))
                       FilledButton.icon(
                         onPressed: () => communityPush(
                           context,
@@ -248,10 +260,8 @@ class _CommunityProfilePageState extends State<CommunityProfilePage> {
                     if (r?['status'] == 'accepted')
                       button('Hủy kết bạn', 'unfriend'),
                     button(
-                      blocked.contains(widget.repo.uid)
-                          ? 'Bỏ chặn'
-                          : 'Chặn người này',
-                      blocked.contains(widget.repo.uid) ? 'unblock' : 'block',
+                      blockedByMe ? 'Bỏ chặn' : 'Chặn người này',
+                      blockedByMe ? 'unblock' : 'block',
                     ),
                     TextButton(
                       onPressed: () => reportCommunity(context, widget.repo, {
@@ -259,9 +269,11 @@ class _CommunityProfilePageState extends State<CommunityProfilePage> {
                       }),
                       child: const Text('Báo cáo hồ sơ'),
                     ),
-                    if (blocked.isNotEmpty)
-                      const Text(
-                        'Tương tác đang bị chặn.',
+                    if (!interact)
+                      Text(
+                        blockedByMe
+                            ? 'Bạn đã chặn người này.'
+                            : 'Hiện không thể tương tác với người này.',
                         textAlign: TextAlign.center,
                       ),
                   ],
@@ -487,8 +499,7 @@ class _CommunityPeoplePageState extends State<CommunityPeoplePage> {
                 .where(
                   (r) => widget.messages
                       ? r['hasMessages'] == true || r['status'] == 'accepted'
-                      : r['status'] != 'none' ||
-                            (r['blockedBy'] as List).contains(widget.repo.uid),
+                      : r['status'] != 'none' || iBlocked(r, widget.repo.uid),
                 )
                 .toList(),
           };
@@ -501,9 +512,11 @@ class _CommunityPeoplePageState extends State<CommunityPeoplePage> {
             : 'Ghé hồ sơ tác giả hoặc tìm bạn bằng mã trên hồ sơ.',
         builder: (r, refresh) {
           final p = json(r['profile']);
-          final blocked = (r['blockedBy'] as List).isNotEmpty;
-          final subtitle = blocked
-              ? 'Đã chặn tương tác'
+          final interact = canInteractWith(r);
+          final subtitle = !interact
+              ? (iBlocked(r, widget.repo.uid)
+                    ? 'Đã chặn tương tác'
+                    : 'Hiện không thể nhắn tin')
               : r['status'] == 'accepted'
               ? 'Bạn bè'
               : r['status'] == 'pending'
@@ -514,12 +527,20 @@ class _CommunityPeoplePageState extends State<CommunityPeoplePage> {
           if (widget.messages) {
             return _ConversationCard(
               name: p['name'],
-              preview: (r['preview'] as String? ?? '').isNotEmpty
+              preview: !interact
+                  ? subtitle
+                  : (r['preview'] as String? ?? '').isNotEmpty
                   ? r['preview'] as String
                   : 'Chưa có tin nhắn',
               time: communityTime(r['lastMessageAt']),
               unread: r['unread'] == true,
               onTap: () async {
+                // Không mở được hội thoại khi đang bị chặn; báo nhẹ nhàng.
+                if (!interact) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(subtitle)));
+                  return;
+                }
                 await communityPush(
                   context,
                   CommunityChatPage(
@@ -687,8 +708,7 @@ class _CommunityChatPageState extends State<CommunityChatPage>
   @override
   Widget build(BuildContext context) {
     final canSend =
-        relation?['status'] == 'accepted' &&
-        (relation?['blockedBy'] as List? ?? []).isEmpty;
+        relation?['status'] == 'accepted' && canInteractWith(relation);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.name),

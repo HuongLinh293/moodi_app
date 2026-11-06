@@ -161,15 +161,16 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
     setState(() => _phase = _SessionPhase.complete);
   }
 
-  void _saveSession({
+  /// Trả false khi chưa có cảm xúc nào để gắn bài tập vào (chưa check-in).
+  bool _saveSession({
     String? afterEmotionKey,
     int? afterIntensity,
     int? usefulnessRating,
     int? easeRating,
     String? repeatPreference,
   }) {
-    if (_saved && afterEmotionKey == null) return;
-    _state.completeExercise(
+    if (_saved && afterEmotionKey == null) return true;
+    final recorded = _state.completeExercise(
       exerciseId: _config.id,
       note: _collectedNote(),
       afterEmotionKey: afterEmotionKey,
@@ -178,15 +179,20 @@ class _PracticeSessionSheetState extends State<PracticeSessionSheet> {
       easeRating: easeRating,
       repeatPreference: repeatPreference,
     );
-    _saved = true;
+    _saved = recorded;
+    return recorded;
   }
 
   void _completeWithoutAfter() {
-    _saveSession();
+    final recorded = _saveSession();
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Đã ghi nhận bài thực hành vừa hoàn thành.'),
+        content: Text(
+          recorded
+              ? 'Đã ghi nhận bài thực hành vừa hoàn thành.'
+              : 'Đã xong bài thực hành. Check-in để Moodi ghi nó vào nhật ký.',
+        ),
         backgroundColor: AppColors.ink,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

@@ -28,6 +28,12 @@ void main() {
     }
   });
 
+  test('flags decomposed (NFD) text like the backend', () {
+    // "muốn chết" với dấu là ký tự tổ hợp rời.
+    const decomposed = 'muo\u0302\u0301n che\u0302\u0301t';
+    expect(hasCrisisSignal(decomposed), isTrue);
+  });
+
   test('offline fallback reflection switches to the safety flow', () {
     final reflection = AIReflection.forEmotion(
       emotionKey: 'sad',

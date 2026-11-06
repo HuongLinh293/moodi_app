@@ -1013,7 +1013,7 @@ class _HomeShellState extends State<HomeShell> {
                 child: Semantics(
                   button: true,
                   selected: isActive,
-                  label: '${item.label}${isActive ? ', selected' : ''}',
+                  label: '${item.label}${isActive ? ', đang chọn' : ''}',
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(

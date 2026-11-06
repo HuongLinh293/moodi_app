@@ -1331,7 +1331,9 @@ class _JournalViewState extends State<JournalView> {
                         ),
                       ),
                       TextSpan(
-                        text: ' ${_displayedMonth.year}',
+                        // Khoảng rộng (en space): chữ nghiêng "11" dính vào
+                        // năm nên trông như "112026" với dấu cách thường.
+                        text: '\u2002${_displayedMonth.year}',
                         style: const TextStyle(color: AppColors.ink),
                       ),
                     ],

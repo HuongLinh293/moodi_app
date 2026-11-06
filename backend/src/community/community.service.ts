@@ -239,6 +239,9 @@ const relationOut = (r: Relation, viewer: string) => ({
   requestedBy: r.requestedBy,
   status: r.status,
   blockedBy: r.blockedBy.filter((x) => x === viewer),
+  // Có tương tác được không (bất kể bên nào chặn), để app khóa nút gửi mà
+  // không cần biết ai đã chặn ai.
+  canInteract: r.blockedBy.length === 0,
   hasMessages: r.hasMessages,
   lastSender: r.lastSender ?? null,
   lastMessageAt: millis(r.lastMessageAt),
@@ -509,25 +512,35 @@ export class CommunityService {
       );
       return group!;
     };
-    const postAccess = async () => {
+    // Chủ nhóm (trong nhóm của mình) và admin phải luôn thấy bài để kiểm duyệt;
+    // việc chặn không được dùng để né kiểm duyệt.
+    const moderates = (group: CommunityGroup | null) =>
+      isAdmin || (!!group && group.owner === uid);
+    // hideBlocked = true khi xem hoặc tương tác: chặn theo cả hai chiều, với
+    // người bị chặn bài trông như đã gỡ. Xóa và báo cáo truyền false để người
+    // dùng vẫn gỡ được bình luận của mình và vẫn báo cáo được nội dung xấu.
+    const postAccess = async (hideBlocked = true) => {
       const group = await spaceAccess(d.space);
       const post = await m.findOne(CommunityPost, {
         where: { space: d.space, id: id(d.postId) },
       });
       if (!post || post.deleted || post.ready === false)
         fail("not-found", "Bài viết đã được gỡ.");
-      if (post!.author !== uid) {
+      if (hideBlocked && post!.author !== uid && !moderates(group)) {
         const rel = await relation(post!.author);
-        // Chặn theo cả hai chiều: với người bị chặn, bài trông như đã gỡ.
         if (rel.blockedBy.length) fail("not-found", "Bài viết đã được gỡ.");
       }
       return { group, post: post! };
     };
-    const hiddenAuthors = async () => {
-      const blocked = await qb(CommunityConnection)
-        .where(":uid = ANY(x.members)", { uid })
-        .andWhere("cardinality(x.blockedBy) > 0")
-        .getMany();
+    // Người kiểm duyệt chỉ ẩn những người chính họ đã chặn; người dùng thường
+    // ẩn theo cả hai chiều.
+    const hiddenAuthors = async (moderator: boolean) => {
+      const query = qb(CommunityConnection).where(":uid = ANY(x.members)", {
+        uid,
+      });
+      if (moderator) query.andWhere(":uid = ANY(x.blockedBy)", { uid });
+      else query.andWhere("cardinality(x.blockedBy) > 0");
+      const blocked = await query.getMany();
       return [
         ...new Set(blocked.flatMap((r) => r.members.filter((x) => x !== uid))),
       ];
@@ -691,7 +704,7 @@ export class CommunityService {
           if (d.author)
             query.andWhere("x.author = :author", { author: d.author });
           if (d.mood) query.andWhere("x.mood = :mood", { mood: d.mood });
-          const hidden = await hiddenAuthors();
+          const hidden = await hiddenAuthors(moderates(group));
           if (hidden.length)
             query.andWhere("x.author NOT IN (:...hidden)", { hidden });
           out = await this.page(query, d.cursor, postOut);
@@ -772,7 +785,9 @@ export class CommunityService {
         case "comment":
         case "comments":
         case "deleteComment": {
-          const { group, post } = await postAccess();
+          const { group, post } = await postAccess(
+            d.action !== "deletePost" && d.action !== "deleteComment",
+          );
           const key = { space: d.space, id: post.id };
           if (d.action === "deletePost") {
             check(post.author === uid || group?.owner === uid || isAdmin);
@@ -877,7 +892,7 @@ export class CommunityService {
                 postId: post.id,
               })
               .andWhere("x.deleted = false");
-            const hidden = await hiddenAuthors();
+            const hidden = await hiddenAuthors(moderates(group));
             if (hidden.length)
               query.andWhere("x.author NOT IN (:...hidden)", { hidden });
             out = await this.page(query, d.cursor, (c) => ({
@@ -1233,7 +1248,7 @@ export class CommunityService {
             evidence = message!.text;
             imagePath = message!.imagePath || "";
           } else if (d.postId) {
-            const { post } = await postAccess();
+            const { post } = await postAccess(false);
             target = post.author;
             path = `posts/${d.space}/${post.id}`;
             evidence = post.text;

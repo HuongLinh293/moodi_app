@@ -84,7 +84,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.chevron_right_rounded));
     await tester.pumpAndSettle();
-    expect(find.textContaining('THÁNG ${now.month} ', findRichText: true), findsOneWidget);
+    expect(find.textContaining('THÁNG ${now.month}\u2002', findRichText: true), findsOneWidget);
 
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
     if (tomorrow.month == now.month) {
