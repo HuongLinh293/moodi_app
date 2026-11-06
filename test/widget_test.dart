@@ -598,7 +598,7 @@ void main() {
   });
 
   testWidgets(
-    'API login shows email form and registration without unsupported providers',
+    'API login keeps configured Google available during a connection failure',
     (tester) async {
       final state = MindraState();
       addTearDown(state.dispose);
@@ -611,7 +611,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Email'), findsOneWidget);
       expect(find.text('Mật khẩu'), findsOneWidget);
-      expect(find.byKey(const ValueKey('btn-google-sign-in')), findsNothing);
+      expect(find.byKey(const ValueKey('btn-google-sign-in')), findsOneWidget);
+      expect(find.text('Thử kết nối lại'), findsOneWidget);
       await tester.ensureVisible(
         find.byKey(const ValueKey('toggle-auth-mode')),
       );

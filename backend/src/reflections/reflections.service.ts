@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import {
+  Between, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, QueryFailedError, Repository,
+} from 'typeorm';
 import { AiReflection } from './entities/ai-reflection.entity';
 import { GenerateReflectionDto, ReflectionFeedbackDto } from './dto/reflection.dto';
 import { CBT_TEMPLATES, CRISIS_KEYWORDS, normalizeExercise } from './cbt-templates';
@@ -8,8 +10,19 @@ import { JournalEntry } from '../entries/entities/journal-entry.entity';
 import { User } from '../users/entities/user.entity';
 import { pageParams } from '../common/pagination';
 
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_MODEL = 'gemini-3.5-flash';
+const DEFAULT_FALLBACK_MODEL = 'gemini-3.5-flash-lite';
+// App chờ tối đa 20 giây rồi tự hiện mẫu; giữ toàn bộ chuỗi thử dưới mức đó.
+const AI_BUDGET_MS = 17_000;
+const PER_CALL_TIMEOUT_MS = 12_000;
+
+// Lỗi khi gọi một model. `status` = 0 nghĩa là lỗi mạng, hết giờ hoặc phản hồi hỏng.
+class ProviderError extends Error {
+  constructor(message: string, readonly status: number, readonly timedOut = false) {
+    super(message);
+  }
+}
 
 type ReflectionResult = Record<string, unknown>;
 
@@ -59,7 +72,7 @@ export class ReflectionsService {
           result,
           source,
         })
-      : await this.reflectionsRepository.save(
+      : await this.insertOrExisting(
           this.reflectionsRepository.create({
             userId: user.id,
             entryId,
@@ -72,6 +85,29 @@ export class ReflectionsService {
           }),
         );
     return this.toResponse(saved);
+  }
+
+  // Hai yêu cầu song song cho cùng entry: yêu cầu về sau chạm unique index
+  // (userId, entryId). Trả bản đã lưu thay vì lỗi 500.
+  private async insertOrExisting(reflection: AiReflection): Promise<AiReflection> {
+    try {
+      return await this.reflectionsRepository.save(reflection);
+    } catch (error) {
+      const code = (error as QueryFailedError & { driverError?: { code?: string } })
+        .driverError?.code;
+      if (!(error instanceof QueryFailedError) || code !== '23505' || !reflection.entryId) {
+        throw error;
+      }
+      const existing = await this.reflectionsRepository.findOne({
+        where: { userId: reflection.userId, entryId: reflection.entryId },
+      });
+      if (!existing) throw error;
+      // Bản an toàn luôn thắng để không mất màn hỗ trợ khủng hoảng.
+      if (reflection.source === 'safety' && existing.source !== 'safety') {
+        return this.reflectionsRepository.save({ ...existing, ...reflection, id: existing.id });
+      }
+      return existing;
+    }
   }
 
   async history(user: User, limit?: unknown): Promise<any[]> {
@@ -225,48 +261,107 @@ Trả về đúng JSON với các trường:
   "microGoalPrompt": "Một hành động nhỏ làm được trong 5 phút"
 }`;
 
+    const parsed = await this.callWithFallback(prompt);
+    if (!parsed) return null;
+
+    const emotions = Array.isArray(parsed.possibleEmotions)
+      ? parsed.possibleEmotions
+          .filter((e: unknown) => typeof e === 'string' && e.trim())
+          .slice(0, 3)
+          .map((e: string) => e.trim().slice(0, 40))
+      : [];
+    return {
+      possibleEmotions: emotions.length ? emotions : ['Căng thẳng'],
+      possibleTrigger: text(parsed.possibleTrigger, 'Tình huống chưa rõ ràng'),
+      intensifyingThought: text(parsed.intensifyingThought, thought || 'Suy nghĩ tự động'),
+      reflectionQuestion: text(parsed.reflectionQuestion, 'Điều gì đang thực sự diễn ra?'),
+      balancedThought: text(parsed.balancedThought, 'Mọi chuyện rồi sẽ ổn định trở lại.'),
+      recommendedExercise: normalizeExercise(parsed.recommendedExercise),
+      recommendationReason: text(
+        parsed.recommendationReason,
+        'Giúp điều hòa hơi thở và giảm căng thẳng.',
+      ),
+      microGoalPrompt: text(parsed.microGoalPrompt, 'Dành 2 phút thở sâu và uống một ngụm nước.'),
+      safetyFlag: false,
+      safetyReason: null,
+      recommendationsDismissed: false,
+    };
+  }
+
+  /** Chờ giữa hai lần thử model chính; test đặt về 0. */
+  retryDelayMs = 1000;
+
+  // Thứ tự: model chính → thử lại model chính một lần nếu quá tải → model dự phòng.
+  // Lỗi key/quyền (400/401/403) thì dừng luôn vì model khác cũng sẽ lỗi.
+  // Trả null khi mọi lần thử đều thất bại để dùng mẫu có sẵn.
+  private async callWithFallback(prompt: string): Promise<any | null> {
+    const primary = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+    const fallback = process.env.GEMINI_FALLBACK_MODEL ?? DEFAULT_FALLBACK_MODEL;
+    const deadline = Date.now() + AI_BUDGET_MS;
+    const remaining = () => deadline - Date.now();
+
+    const attempt = async (model: string, label: string) => {
+      try {
+        const result = await this.callModel(model, prompt, Math.min(PER_CALL_TIMEOUT_MS, remaining()));
+        if (label !== 'primary') this.logger.log(`reflection.provider_recovered: ${label} ${model}`);
+        return { result, error: null as ProviderError | null };
+      } catch (error) {
+        const e = error instanceof ProviderError ? error : new ProviderError(String(error), 0);
+        // Không ghi nội dung người dùng vào log.
+        this.logger.warn(`reflection.provider_failed: ${label} ${model} status=${e.status} ${e.message}`);
+        return { result: null, error: e };
+      }
+    };
+    const fatal = (e: ProviderError) => [400, 401, 403].includes(e.status);
+    const overloaded = (e: ProviderError) => e.status === 429 || e.status >= 500;
+
+    let { result, error } = await attempt(primary, 'primary');
+    if (result) return result;
+
+    if (!fatal(error!) && overloaded(error!) && remaining() > this.retryDelayMs + 3000) {
+      await new Promise((resolve) => setTimeout(resolve, this.retryDelayMs));
+      ({ result, error } = await attempt(primary, 'retry'));
+      if (result) return result;
+    }
+
+    if (fallback && fallback !== primary && !fatal(error!) && remaining() > 3000) {
+      ({ result } = await attempt(fallback, 'fallback'));
+      if (result) return result;
+    }
+
+    this.logger.warn('reflection.provider_unavailable: dùng mẫu có sẵn');
+    return null;
+  }
+
+  private async callModel(model: string, prompt: string, timeoutMs: number): Promise<any> {
+    let response: Response;
     try {
-      const response = await fetch(GEMINI_URL, {
+      response = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': process.env.GEMINI_API_KEY ?? '',
+        },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { responseMimeType: 'application/json', temperature: 0.7 },
         }),
-        signal: AbortSignal.timeout(50_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!response.ok) throw new Error(`status ${response.status}`);
+    } catch (error) {
+      const timedOut = (error as Error).name === 'TimeoutError';
+      throw new ProviderError(timedOut ? 'timeout' : (error as Error).message, 0, timedOut);
+    }
+    if (!response.ok) throw new ProviderError(`status ${response.status}`, response.status);
+    try {
       const body: any = await response.json();
       const raw = body?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (typeof raw !== 'string') throw new Error('empty response');
       const parsed = JSON.parse(raw.replace(/```json/g, '').replace(/```/g, '').trim());
-
-      const emotions = Array.isArray(parsed.possibleEmotions)
-        ? parsed.possibleEmotions
-            .filter((e: unknown) => typeof e === 'string' && e.trim())
-            .slice(0, 3)
-            .map((e: string) => e.trim().slice(0, 40))
-        : [];
-      return {
-        possibleEmotions: emotions.length ? emotions : ['Căng thẳng'],
-        possibleTrigger: text(parsed.possibleTrigger, 'Tình huống chưa rõ ràng'),
-        intensifyingThought: text(parsed.intensifyingThought, thought || 'Suy nghĩ tự động'),
-        reflectionQuestion: text(parsed.reflectionQuestion, 'Điều gì đang thực sự diễn ra?'),
-        balancedThought: text(parsed.balancedThought, 'Mọi chuyện rồi sẽ ổn định trở lại.'),
-        recommendedExercise: normalizeExercise(parsed.recommendedExercise),
-        recommendationReason: text(
-          parsed.recommendationReason,
-          'Giúp điều hòa hơi thở và giảm căng thẳng.',
-        ),
-        microGoalPrompt: text(parsed.microGoalPrompt, 'Dành 2 phút thở sâu và uống một ngụm nước.'),
-        safetyFlag: false,
-        safetyReason: null,
-        recommendationsDismissed: false,
-      };
+      if (!parsed || typeof parsed !== 'object') throw new Error('not an object');
+      return parsed;
     } catch (error) {
-      // Không ghi nội dung người dùng vào log.
-      this.logger.warn(`reflection.provider_unavailable: ${(error as Error).message}`);
-      return null;
+      throw new ProviderError(`bad response: ${(error as Error).message}`, 0);
     }
   }
 

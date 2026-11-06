@@ -75,7 +75,9 @@ class _MindraAppState extends State<MindraApp> {
     }
 
     return ChangeNotifierProvider<MindraState>(
-      create: (_) => MindraState()..loadReminder(),
+      create: (_) => MindraState()
+        ..loadReminder()
+        ..loadAiConsent(),
       child: appContent,
     );
   }

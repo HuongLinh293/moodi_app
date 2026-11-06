@@ -3,6 +3,7 @@ import 'dart:async';
 import '../repositories/post_repository.dart';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/garden_layout.dart';
 import '../core/reminder_service.dart';
@@ -45,6 +46,11 @@ class MindraState extends ChangeNotifier {
   DemoScenario _demoScenario = DemoScenario.active;
   final List<JournalEntry> _entries = [];
   final Map<String, AIReflection> _aiReflections = {};
+  // Yêu cầu tạo phản tư đang chạy theo entry, để mở lại màn hình không gửi
+  // trùng (tốn phí AI gấp đôi và chạm unique index ở server).
+  final Map<String, Future<AIReflection>> _reflectionRequests = {};
+  // Tăng khi nội dung entry đổi; kết quả của yêu cầu cũ bị bỏ qua.
+  final Map<String, int> _reflectionVersions = {};
   final List<GardenMoment> _gardenMoments = [];
 
   // Shared Garden State
@@ -108,6 +114,7 @@ class MindraState extends ChangeNotifier {
         _entries.clear();
         _gardenMoments.clear();
         _aiReflections.clear();
+    _reflectionRequests.clear();
         _weeklyReview = null;
         _posts.clear();
         _microGoals.clear();
@@ -240,17 +247,38 @@ class MindraState extends ChangeNotifier {
   ({bool google, bool apple}) get socialProviders =>
       _socialProviders ?? (google: false, apple: false);
 
-  /// Hiện nút Google/Apple chỉ khi cả app lẫn server đã cấu hình.
+  bool _socialProvidersUnavailable = false;
+  bool get socialProvidersUnavailable => _socialProvidersUnavailable;
+  bool _loadingSocialProviders = false;
+  bool get loadingSocialProviders => _loadingSocialProviders;
+
+  /// A connection failure is distinct from an explicitly disabled provider.
   Future<void> loadSocialProviders() async {
+    if (_loadingSocialProviders) return;
+    _loadingSocialProviders = true;
     final social = _authRepository.socialSignIn;
-    final server = await _authRepository.socialProviders();
-    final apple = server.apple && await social.appleAvailable();
-    if (_disposed) return;
-    _socialProviders = (
-      google: server.google && social.googleConfigured,
-      apple: apple,
-    );
-    notifyListeners();
+    try {
+      final server = await _authRepository.socialProviders();
+      final apple = server.apple && await social.appleAvailable();
+      if (_disposed) return;
+      _socialProviders = (
+        google: server.google && social.googleConfigured,
+        apple: apple,
+      );
+      _socialProvidersUnavailable = false;
+    } catch (_) {
+      if (_disposed) return;
+      _socialProvidersUnavailable = true;
+      // Keep known configuration through transient outages. The backend still
+      // validates all sign-ins; showing the button grants no authentication.
+      _socialProviders ??= (
+        google: social.googleConfigured,
+        apple: await social.appleAvailable(),
+      );
+    } finally {
+      _loadingSocialProviders = false;
+      if (!_disposed) notifyListeners();
+    }
   }
 
   Future<void> signInWithGoogle() =>
@@ -576,6 +604,17 @@ class MindraState extends ChangeNotifier {
   void updateEntry(JournalEntry entry) {
     final index = _entries.indexWhere((e) => e.id == entry.id);
     if (index == -1) return;
+    final previous = _entries[index];
+    if (previous.situation != entry.situation ||
+        previous.thought != entry.thought ||
+        previous.emotionKey != entry.emotionKey ||
+        previous.intensity != entry.intensity) {
+      // Phản tư cũ không còn khớp nội dung; bỏ đi để lần mở sau hỏi lại server
+      // (server kiểm tra lại tín hiệu khủng hoảng trên nội dung mới).
+      _aiReflections.remove(entry.id);
+      _reflectionRequests.remove(entry.id);
+      _reflectionVersions[entry.id] = (_reflectionVersions[entry.id] ?? 0) + 1;
+    }
     _entries[index] = entry;
     _queueEntryWrite(entry);
   }
@@ -1148,9 +1187,36 @@ class MindraState extends ChangeNotifier {
   Map<String, String>? _weeklyReview;
   Map<String, String>? get weeklyReview => _weeklyReview;
 
+  static const _aiConsentKey = 'moodi.aiConsent.v1';
+  static const _prefsStorage = FlutterSecureStorage(
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+    mOptions: MacOsOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
+
   void setAiConsent(bool val) {
     _aiConsent = val;
     notifyListeners();
+    unawaited(
+      _prefsStorage
+          .write(key: _aiConsentKey, value: val.toString())
+          .catchError((Object e) => debugPrint('aiConsent save failed: $e')),
+    );
+  }
+
+  /// Đọc lựa chọn gửi nhật ký cho AI đã lưu (gọi khi mở app).
+  Future<void> loadAiConsent() async {
+    try {
+      final raw = await _prefsStorage.read(key: _aiConsentKey);
+      if (raw == null || _disposed) return;
+      _aiConsent = raw == 'true';
+      notifyListeners();
+    } catch (e) {
+      debugPrint('aiConsent load failed: $e');
+    }
   }
 
   void setLowStimulationMode(bool val) {
@@ -1390,6 +1456,7 @@ class MindraState extends ChangeNotifier {
     _sharedGarden = null;
     _sharedMoments.clear();
     _aiReflections.clear();
+    _reflectionRequests.clear();
     _weeklyReview = null;
     _sessionRevision++;
     _isAuthenticated = false;
@@ -1409,6 +1476,7 @@ class MindraState extends ChangeNotifier {
     _demoScenario = scenario;
     _currentTab = 0;
     _aiReflections.clear();
+    _reflectionRequests.clear();
     _gardenMoments.clear();
     _weeklyReview = null;
     _microGoals
@@ -1451,23 +1519,36 @@ class MindraState extends ChangeNotifier {
     }).firstOrNull;
   }
 
-  Future<AIReflection> fetchOrGenerateAIReflection(JournalEntry entry) async {
+  Future<AIReflection> fetchOrGenerateAIReflection(JournalEntry entry) {
     final cached = reflectionForEntry(entry.id);
-    if (cached != null) return cached;
+    if (cached != null) return Future.value(cached);
+    return _reflectionRequests[entry.id] ??= _generateReflection(entry);
+  }
+
+  Future<AIReflection> _generateReflection(JournalEntry entry) async {
     final revision = _sessionRevision;
-    final generated = await _reflectionRepository.generateReflection(
-      emotionKey: entry.emotionKey,
-      intensity: entry.intensity,
-      situation: entry.situation,
-      thought: entry.thought,
-      entryId: entry.id,
-    );
-    if (_disposed || revision != _sessionRevision) {
-      throw StateError('Phiên đăng nhập đã thay đổi.');
+    final contentVersion = _reflectionVersions[entry.id] ?? 0;
+    bool stillCurrent() =>
+        !_disposed &&
+        revision == _sessionRevision &&
+        contentVersion == (_reflectionVersions[entry.id] ?? 0);
+    try {
+      final generated = await _reflectionRepository.generateReflection(
+        emotionKey: entry.emotionKey,
+        intensity: entry.intensity,
+        situation: entry.situation,
+        thought: entry.thought,
+        entryId: entry.id,
+      );
+      if (!stillCurrent()) {
+        throw StateError('Nhật ký hoặc phiên đăng nhập đã thay đổi.');
+      }
+      cacheAIReflection(entry.id, generated);
+      notifyListeners();
+      return generated;
+    } finally {
+      if (stillCurrent()) _reflectionRequests.remove(entry.id);
     }
-    cacheAIReflection(entry.id, generated);
-    notifyListeners();
-    return generated;
   }
 
   void _startApiListeners(String userId) {

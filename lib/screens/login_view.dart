@@ -191,7 +191,8 @@ class _LoginViewState extends State<LoginView>
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    final social = context.watch<MindraState>().socialProviders;
+    final state = context.watch<MindraState>();
+    final social = state.socialProviders;
     return Scaffold(
       backgroundColor: AppColors.paper,
       body: SafeArea(
@@ -235,7 +236,25 @@ class _LoginViewState extends State<LoginView>
                     const SizedBox(height: 16),
                     // ── Toggle Mode ──
                     _buildToggleMode(),
-                    // ── Google & Apple: chỉ hiện khi app và server đã cấu hình ──
+                    if (state.socialProvidersUnavailable) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Chưa kết nối được dịch vụ đăng nhập.',
+                        textAlign: TextAlign.center,
+                      ),
+                      TextButton.icon(
+                        onPressed: state.loadingSocialProviders
+                            ? null
+                            : state.loadSocialProviders,
+                        icon: const Icon(Icons.refresh),
+                        label: Text(
+                          state.loadingSocialProviders
+                              ? 'Đang kết nối…'
+                              : 'Thử kết nối lại',
+                        ),
+                      ),
+                    ],
+                    // Provider availability is retained during temporary outages.
                     if (social.google || social.apple) ...[
                       const SizedBox(height: 24),
                       _buildDivider(),
